@@ -2,14 +2,37 @@
 __pycache__/
 *.py[cod]
 
-# Ignore environment folder (e.g., venv)
-venv/
+# Ignore virtual environment folders
+.venv/
+.venv_nomad/
 
-# Ignore system files (Mac/Windows)
+# Ignore IDE configuration files
+.idea/
+
+# Ignore macOS system files
 .DS_Store
+
+# Ignore Windows system files
 Thumbs.db
 
-# Ignore logs and lock files
+# Ignore logs
 *.log
-*.lock
 
+# Ignore other Python specifics
+*.pyc
+*.pyo
+*.pyd
+*.env
+*.tox
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Ignore dependency/binary files
+*.lock
+*.bak
+*.swp
+
+# Ignore any hidden folders or files starting with .
+.*
