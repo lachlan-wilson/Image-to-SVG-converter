@@ -1,0 +1,8 @@
+joblib==1.5.3
+numpy @ file:///Users/runner/miniforge3/conda-bld/numpy_1732314320264/work/dist/numpy-2.0.2-cp39-cp39-macosx_10_13_x86_64.whl#sha256=28281c60f0432a5b76d12a1cd10535b9c4c9616e1ae0ab190b9d99c49f5c8b9b
+opencv-python==4.11.0
+opencv-python-headless==4.11.0
+pillow==11.3.0
+scikit-learn==1.6.1
+scipy==1.13.1
+threadpoolctl==3.6.0
