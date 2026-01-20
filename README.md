@@ -7,3 +7,7 @@ This program takes an image (currently .jpg) and converts it into an SVG. It fir
 - Pillow
 - scikit-learn
 - opencv-python
+### Enviroment
+I used a Conda enviroment through miniforge3.
+## Usage
+
