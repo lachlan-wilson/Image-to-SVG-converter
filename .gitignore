@@ -1,0 +1,15 @@
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+
+# Ignore environment folder (e.g., venv)
+venv/
+
+# Ignore system files (Mac/Windows)
+.DS_Store
+Thumbs.db
+
+# Ignore logs and lock files
+*.log
+*.lock
+
