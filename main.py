@@ -8,20 +8,21 @@ from PIL import Image
 import cv2
 import numpy
 from sklearn.cluster import MiniBatchKMeans
-import shutil
 import time
 
 
 # Turns a string into a title with a constant width
 def title(title):
-    char_length = int((50 - len(title))/2)
-    if len(title) % 2 == 1:
+    char_length = int((50 - len(title))/2)  # Makes a constant width no matter the length of the title
+    if len(title) % 2 == 1: # Accounts for half spaces
         offset = 1
     else:
         offset = 0
+
+    # Displays the title in blue with correct length
     print("\033[94m<" + "-" * char_length + f" {title} " + "-" * (char_length+offset) + ">\033[0m")
 
-
+# Does the same thing as title but shorter and green
 def subtitle(title):
     char_length = int((30 - len(title))/2)
     if len(title) % 2 == 1:
@@ -30,12 +31,9 @@ def subtitle(title):
         offset = 0
     print("\033[32m<" + "-" * char_length + f" {title} " + "-" * (char_length+offset) + ">\033[0m")
 
-
+# Finds the squared distance between two coordinates
 def get_distance(coord1, coord2):
-    distance = math.sqrt(
-        (coord1[0] - coord2[0]) ** 2 +
-        (coord1[1] - coord2[1]) ** 2
-    )
+    distance = (coord1[0] - coord2[0]) ** 2 + (coord1[1] - coord2[1]) ** 2
     return distance
 
 
@@ -43,10 +41,12 @@ def get_distance(coord1, coord2):
 def get_inputs():
     title("Inputs")
 
+    # Sets the default values for easier changing
     defaults = ["test_image", 8, "n", 5, 100, 3, 1]
 
     # Gets Image Path
     image_path = input(f"Image path (.jpg) [{defaults[0]}]: ") or defaults[0]
+    # Ensures the path exists
     while not os.path.exists(f"{os.path.join('Images', image_path)}.jpg"):
         print("\033[91mError.File not found. Please enter a valid file path.\033[0m")
         image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
@@ -67,7 +67,7 @@ def get_inputs():
             except ValueError:
                 print("\033[91mError. Invalid file type. Please enter an integer.\033[0m")
 
-    # Gets whether or not the image has a green background.
+    # Gets whether the image has a green background.
     answer = input(f"Green background (y/n) [{defaults[2]}]: ") or defaults[2]
     while not(answer == "y" or answer == "n"):
         print('\033[91mError. Invalid input. Please enter "y" or "n" \033[0m')
@@ -118,7 +118,7 @@ def get_inputs():
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
 
-    print("")
+    print("")   # Skips a line because last line could be anything
 
     return image_path, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width, green_background
 
@@ -126,16 +126,20 @@ def get_inputs():
 # Loads image in the RBG colour space
 def load_image(image_path):
     title("Loading Image")
+
     print("Loading image...")
+    # Stores image as a numpy array
     image = cv2.imread(f"{os.path.join('Images', image_path)}.jpg")
     print("Loaded Image.\n")
 
     print("Creating output folder...")
+    # Creates a folder with the same name as the image
     output_path = f"{image_path}_output"
     os.makedirs(output_path, exist_ok=True)
     print("Created output folder.\n")
 
     print("Converting image to RBG...")
+    # Converts image to RGB colour space
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     print("Converted image to RGB.\n")
 
@@ -145,11 +149,12 @@ def load_image(image_path):
 # Scales parameters
 def scale_parameters(image, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width):
 
-    height, width = image.shape[:2]
+    height, width = image.shape[:2]     # Gets the height and width of the image in pixels
 
-    length_enlargement_scale_factor = height / 420
+    length_enlargement_scale_factor = height / 420  # is used to conver mm to pixels, A3 is 420mm high
     area_enlargement_scale_factor = length_enlargement_scale_factor ** 2
 
+    # Scales distances and areas by the correct factors
     max_bridge_contour_area = int(max_bridge_contour_area * area_enlargement_scale_factor)
     min_contour_area = int(min_contour_area * area_enlargement_scale_factor)
     max_contour_distance = int(max_contour_distance * length_enlargement_scale_factor)
@@ -163,11 +168,12 @@ def quantise_image(image, colour_depth, image_path, output_path, green_backgroun
     title("Quantising Image")
 
     print("Converting image to LAB...")
+    # Converts the image to LAB colour space
     image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
     print("Converted image to LAB.\n")
 
     print("Reshaping image...")
-    height, width = image.shape[:2]
+    height, width = image.shape[:2]     # Gets the height and width of the image in pixels
     n_pixels = height * width
     image = image.reshape((-1, 3)).astype(numpy.int16)
     print("Reshaped image.\n")
@@ -465,7 +471,7 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
 
     print("Vectorising layers...\n")
     temp_dir = tempfile.mkdtemp(prefix="potrace_tmp_")
-    potrace_path = shutil.which("potrace")
+    potrace_path = "/usr/local/bin/potrace"
     for i, mask in enumerate(layers):
         subtitle(f"Layer {i + 1}")
         print(f"Vectorising layer {i + 1}...\n")
