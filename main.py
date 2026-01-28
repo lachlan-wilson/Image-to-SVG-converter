@@ -175,59 +175,72 @@ def quantise_image(image, colour_depth, image_path, output_path, green_backgroun
     print("Reshaping image...")
     height, width = image.shape[:2]     # Gets the height and width of the image in pixels
     n_pixels = height * width
+    # Flattens array so each pixel has an index with 3 colours, int16 allows for calculating distances better
     image = image.reshape((-1, 3)).astype(numpy.int16)
     print("Reshaped image.\n")
 
+    # If the image has a green background AKA should have a transparent background
     if green_background:
         print("Removing green background pixels...")
+        # Defines the colour in LAB colour spaces and correct encoding
         green_colour = numpy.array([227, 57, 210], dtype=numpy.int16)
-        green_tolerance = 10
-        image_int = image.astype(numpy.int16)
-        diff = numpy.abs(image_int - green_colour)
+        green_tolerance = 10    # Adds a tolerance to account for changing encoding
+        # Creates an array holding the difference between each pixel in the image and the green colour
+        diff = numpy.abs(image - green_colour)
+        # Creates a boolean array that holds the green pixels
         background = numpy.all(diff <= green_tolerance, axis=1)
-        n_bg_pixels = int(numpy.sum(background))
-
-        image_no_bg = image[~background]
+        n_bg_pixels = int(numpy.sum(background))    # Counts the pixels in the array
+        image = image[~background]    # Removes what were the green pixels
         print(f"Removed {n_bg_pixels} green background pixels.\n")
 
+        # Creates a tuple containing all the colours
         print(f"Forming {colour_depth} colours...")
-        os.environ['LOKY_MAX_CPU_COUNT'] = '1'
+        os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Means it only uses one CPU core?
+        # Finds the most important colours in the image excluding the background
         kmeans = MiniBatchKMeans(n_clusters=(colour_depth-1), random_state=42, batch_size=2048, )
-        pixel_labels_no_bg = kmeans.fit_predict(image_no_bg)
+        pixel_labels_no_bg = kmeans.fit_predict(image)  # Labels each pixel with its colour
         colour_groups = kmeans.cluster_centers_
         print(f"Formed {colour_depth} colours.\n")
 
+        print(f"Adding background...")
+        # Creates an array the same size as the original image where each pixel has index -1 (for background)
         pixel_labels = numpy.full((n_pixels,), fill_value=(colour_depth-1), dtype=int)
+        # Adds the correct pixel labels to the background where the green pixels where not present
         pixel_labels[~background] = pixel_labels_no_bg
-
-        black = numpy.array([0, 128, 128], dtype=numpy.float64)
-        colour_groups = numpy.vstack([colour_groups, black])
+        black = numpy.array([0, 128, 128], dtype=numpy.float64)     # Creates a black in LAB
+        colour_groups = numpy.vstack([colour_groups, black])    # Adds the black colour to the others
+        print(f"Added background.")
 
     else:
+        # Creates a tuple containing all the colours
         print(f"Forming {colour_depth} colours...")
-        os.environ['LOKY_MAX_CPU_COUNT'] = '1'
+        os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Means it only uses one CPU core?
+        # Finds the most important colours in the image
         kmeans = MiniBatchKMeans(n_clusters=colour_depth, random_state=42, batch_size=2048, )
-        pixel_labels = kmeans.fit_predict(image)
+        pixel_labels = kmeans.fit_predict(image) # Labels each pixel with its colour
         colour_groups = kmeans.cluster_centers_
         print(f"Formed {colour_depth} colours.\n")
 
+    # Rebuilds the labels and colour groups to be sorted by lightness
     print("Sorting colours by lightness...")
-    colour_groups_order = (numpy.argsort(colour_groups[:, 0]))
-    colour_groups = colour_groups[colour_groups_order]
-    pixel_label_map = numpy.zeros_like(colour_groups_order)
-    pixel_label_map[colour_groups_order] = numpy.arange(len(colour_groups_order))
-    pixel_labels = pixel_label_map[pixel_labels]
+    colour_groups_order = (numpy.argsort(colour_groups[:, 0]))  # Order of the colours based on the L channel
+    colour_groups = colour_groups[colour_groups_order]  # Reorders the actual array
+    pixel_label_map = numpy.zeros_like(colour_groups_order)     # Creates a blank array the right size
+    pixel_label_map[colour_groups_order] = numpy.arange(len(colour_groups_order))   # Creates an order for the labels
+    pixel_labels = pixel_label_map[pixel_labels]    # Applies the new order
     print("Sorted colours by lightness.\n")
 
+    # Rebuilds the image for use in the next step and to be saved
     print("Rebuilding quantised image...")
-    image = colour_groups[pixel_labels].astype("uint8")
-    image = image.reshape((height, width, 3))
+    image = colour_groups[pixel_labels].astype("uint8")     # Applies the labels and order
+    image = image.reshape((height, width, 3))   # Reshapes the image to it cv2 can work with it
     print("Rebuilt quantised image.\n")
 
     print("Converting image to RBG...")
-    image = cv2.cvtColor(image, cv2.COLOR_LAB2RGB)
+    image = cv2.cvtColor(image, cv2.COLOR_LAB2RGB) # Changes the colour back to RGB
     print("Converted image to RGB.\n")
 
+    # Writes the image to the output folder with an appropriate name
     print("Saving quantised image...")
     cv2.imwrite(f"{output_path}/Quantised_{image_path}.jpg", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
     print("Saved quantised image.\n")
