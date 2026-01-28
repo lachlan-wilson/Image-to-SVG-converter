@@ -1,6 +1,5 @@
 #   ----- Image To SVG Program -----
 #        ----- 29/10/2025 -----
-import math
 import os
 import tempfile
 import subprocess
@@ -14,13 +13,14 @@ import time
 # Turns a string into a title with a constant width
 def title(title):
     char_length = int((50 - len(title))/2)  # Makes a constant width no matter the length of the title
-    if len(title) % 2 == 1: # Accounts for half spaces
+    if len(title) % 2 == 1:     # Accounts for half spaces
         offset = 1
     else:
         offset = 0
 
     # Displays the title in blue with correct length
     print("\033[94m<" + "-" * char_length + f" {title} " + "-" * (char_length+offset) + ">\033[0m")
+
 
 # Does the same thing as title but shorter and green
 def subtitle(title):
@@ -30,6 +30,7 @@ def subtitle(title):
     else:
         offset = 0
     print("\033[32m<" + "-" * char_length + f" {title} " + "-" * (char_length+offset) + ">\033[0m")
+
 
 # Finds the squared distance between two coordinates
 def get_distance(coord1, coord2):
@@ -42,7 +43,7 @@ def get_inputs():
     title("Inputs")
 
     # Sets the default values for easier changing
-    defaults = ["test_image", 8, "n", 5, 100, 3, 1]
+    defaults = ["test_image", 2, "n", 5, 100, 30, 1]
 
     # Gets Image Path
     image_path = input(f"Image path (.jpg) [{defaults[0]}]: ") or defaults[0]
@@ -99,7 +100,7 @@ def get_inputs():
     # Gets Maximum contour Distance
     while True:
         try:
-            max_contour_distance = int(input(f"Maximum contour distance (mm) [{defaults[5]}]: ") or defaults[5])
+            max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[5]}]: ") or defaults[5])
             while max_contour_distance < 0:
                 print("\033[91mError. Invalid real number. Please enter a positive real number.\033[0m")
                 max_contour_distance = int(input(f"Maximum contour area (mm) [{defaults[5]}: ") or defaults[5])
@@ -217,7 +218,7 @@ def quantise_image(image, colour_depth, image_path, output_path, green_backgroun
         os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Means it only uses one CPU core?
         # Finds the most important colours in the image
         kmeans = MiniBatchKMeans(n_clusters=colour_depth, random_state=42, batch_size=2048, )
-        pixel_labels = kmeans.fit_predict(image) # Labels each pixel with its colour
+        pixel_labels = kmeans.fit_predict(image)    # Labels each pixel with its colour
         colour_groups = kmeans.cluster_centers_
         print(f"Formed {colour_depth} colours.\n")
 
@@ -237,7 +238,7 @@ def quantise_image(image, colour_depth, image_path, output_path, green_backgroun
     print("Rebuilt quantised image.\n")
 
     print("Converting image to RBG...")
-    image = cv2.cvtColor(image, cv2.COLOR_LAB2RGB) # Changes the colour back to RGB
+    image = cv2.cvtColor(image, cv2.COLOR_LAB2RGB)  # Changes the colour back to RGB
     print("Converted image to RGB.\n")
 
     # Writes the image to the output folder with an appropriate name
@@ -248,27 +249,30 @@ def quantise_image(image, colour_depth, image_path, output_path, green_backgroun
     return image, colour_groups, pixel_labels.reshape(height, width), colour_groups_order, height, width
 
 
-# Turns the image into layers
+# Turns the image into binary (black and white) layers
 def build_binary_layers(pixel_labels, image_path, output_path, colour_depth):
     title("Building Binary Layers")
 
+    # Creates a folder for the layers to go into
     print("Creating output folder...")
     path = os.path.join(output_path, "PNG_layers_folder")
     os.makedirs(path, exist_ok=True)
     print("Created output folder.\n")
 
     print("Building & saving layers...\n")
-    layers = []
-    for i in range(colour_depth):
+    layers = []     # Initialises an empty array for the layers to go into
+    for i in range(colour_depth):   # Loops for each colour
         subtitle(f"Layer {i+1}")
 
         print(f"Building layer {i + 1}...")
+        # Creates a layer with only the pixels in the relevant colour
         layer = numpy.isin(pixel_labels, numpy.arange(i, colour_depth))
-        layer = (layer.astype(numpy.uint8) * 255)
-        layer = cv2.bitwise_not(layer)
-        layers.append(layer)
+        layer = (layer.astype(numpy.uint8) * 255)   # Makes these pixels white (for binary layers)
+        layer = cv2.bitwise_not(layer)  # Inverts the layer
+        layers.append(layer)    # Adds the layer to the layers array
         print(f"Built layer {i+1}.\n")
 
+        # Writes the layer to the output folder
         print(f"Saving layer {i+1}...")
         filename = os.path.join(path, f"{image_path}_layer_{i+1}.png")
         cv2.imwrite(filename, layer)
@@ -277,71 +281,76 @@ def build_binary_layers(pixel_labels, image_path, output_path, colour_depth):
     return layers
 
 
-# Bridges small contours
+# Gets rid of small contours, bridges medium-sized ones and deals with diagonal joins
 def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width):
     title("Cleaning contours")
 
+    # Creates a folder for the layers to go into
     print("Creating output folder...")
     path = os.path.join(output_path, "PNG_cleaned_layers_folder")
     os.makedirs(path, exist_ok=True)
     print("Created output folder.\n")
 
     print("Cleaning all contours...\n")
-    total_contours = 0
-    bridged_layers = []
+    total_contours = 0  # Initialises a counter
+    bridged_layers = []     # Initialises an empty array for the layers to go into
     for i, layer in enumerate(layers):
         subtitle(f"Layer {i + 1}")
         print(f"Cleaning contours in layer {i + 1}...\n")
-        layer = cv2.bitwise_not(layer)
+        layer = cv2.bitwise_not(layer)  # Inverts the layer
 
         print("Finding contours...")
+        # Finds the contours(edges) of the binary layers and stores whether they're holes or fills
         contours, hierarchy = cv2.findContours(layer, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
 
-        if len(contours) <= 1:
-            bridged_layers.append(layer)
-            total_contours += 1
+        if len(contours) <= 1:  # If it's one big contour
+            bridged_layers.append(layer)    # Adds the layer to the layers array
+            total_contours += 1     # Counts the contour
             print(f"Skipped layer {i + 1} as there was only one contour.\n")
+            # Writes the layer to the folder
             filename = os.path.join(path, f"{image_path}_cleaned_layer_{i + 1}.png")
             cv2.imwrite(filename, cv2.bitwise_not(layer))
-            continue
+            continue    # Skips to the next interation of the loop
 
-        n_of_contours_before = 0
-        hierarchy = hierarchy[0]
+        n_of_contours_before = 0    # Initialises a counter
+        hierarchy = hierarchy[0]    # Flattens the hierarchy array
 
-        for hier in hierarchy:
-            if hier[3] == -1:
-                n_of_contours_before += 1
+        for hier in hierarchy:  # Loop for each contour
+            if hier[3] == -1:   # If fill
+                n_of_contours_before += 1   # Counts the contour
         print(f"Found {n_of_contours_before} contours.\n")
 
-        print("Culling small contours...")
+        print("Categorising contours...")
+        # Initialises arrays to store contours in based on their nature
         fills = []
         holes = []
         small = []
+        bridged_fills = []
 
-        for contour, hier in zip(contours, hierarchy):
-            if hier[3] == -1:
-                if cv2.contourArea(contour) > min_contour_area:
-                    fills.append(contour)
+        for contour, hier in zip(contours, hierarchy):  # Loop for each contour
+            if hier[3] == -1:   # If the contour is filled
+                area = cv2.contourArea(contour)     # Finds the area of the contour
+                if area > min_contour_area:     # If the contour is big enough
+                    fills.append(contour)   # Add the contour to the fills array
+                    if area < max_bridge_contour_area:  # If the contour is small enough to be bridged
+                        bridged_fills.append(contour)   # Add the contour to the bridged_fills array
                 else:
-                    small.append(contour)
+                    small.append(contour)   # Add the contour to the small array
             else:
-                holes.append(contour)
+                holes.append(contour)   # Add the contour to the holes array
+        print(f"Categorised contours. Found {len(bridged_fills)} contours suitable for bridging.\n")
 
-        cv2.drawContours(layer, small, -1, color=0, thickness=-1)
+        print("Culling small contours...")
+        cv2.drawContours(layer, small, -1, color=0, thickness=-1)   # Removes the small contours from the layer
         print(f"Culled {n_of_contours_before - len(fills)} small contours.\n")
 
-        print("Finding contours suitable for bridging...")
-        bridged_fills = []
-        for fill in fills:
-            if cv2.contourArea(fill) < max_bridge_contour_area:
-                bridged_fills.append(fill)
-        print(f"Found {len(bridged_fills)} contours suitable for bridging.\n")
-
         print("Finding centres of all contours...")
+        # Finds the contours of the updated layer
         contours, hierarchy = cv2.findContours(layer, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
-        contour_centers = []
+        contour_centers = []    # Initialises an array to store the contour's centers
 
         for contour in contours:
+            # Finds the centre and stores it as a tuple of coordinates
             m = cv2.moments(contour)
             if m["m00"] != 0:
                 cx = int(m["m10"] / m["m00"])
@@ -351,6 +360,7 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
                 contour_centers.append((None, None))
         print("Found centres of all contours.\n")
 
+        # Finds the centres of bridged contours only
         print("Finding centres of bridge contours...")
         bridged_fills_centers = []
         for bridged_fill in bridged_fills:
@@ -363,34 +373,37 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
                 bridged_fills_centers.append((None, None))
         print("Found centres of bridge contours.\n")
 
+        # Checks if a bridge is eligible and if so draws a bridge
         print("Adding bridges...")
-        n_bridges = 0
+        n_bridges = 0   # Initialises a counter
+        # Loops for each bridged fill and adds an incremental index
         for i2, (bridged_fill, bridged_fill_center) in enumerate(zip(bridged_fills, bridged_fills_centers)):
-            best_distance = float("inf")
+            best_distance = float("inf")    # Initialises the best distance as infinity
 
-            for contour, contour_center in zip(contours, contour_centers):
-                if contour_center == (None, None):
+            for contour, contour_center in zip(contours, contour_centers):  # Check against every other contour
+                if contour_center == (None, None):  # Skipp if no centre was found
                     break
-                distance = get_distance(bridged_fill_center, contour_center)
+                distance = get_distance(bridged_fill_center, contour_center)    # finds the distance between the centers
 
+                # If this is the new lowest distance that's not the distance between itself
                 if distance < best_distance and distance != 0:
-                    nearest_contour = contour
-                    best_distance = distance
+                    nearest_contour = contour   # Update the best contour
+                    best_distance = distance    # Update the lowest distance
 
-            if best_distance < max_contour_distance:
+            if best_distance < max_contour_distance**2:     # If the best distance is less than the max distance (squared to optimise)
 
-                best_distance = float("inf")
-                for test_coord1 in bridged_fill:
-                    for test_coord2 in nearest_contour:
-                        distance = get_distance(test_coord1[0], test_coord2[0])
+                best_distance = float("inf")    # Initialises a new best distance for each point as infinity
+                for test_coord1 in bridged_fill:    # For each point in the bridged contour
+                    for test_coord2 in nearest_contour:     # For each point in the nearest contour
+                        distance = get_distance(test_coord1[0], test_coord2[0]) # Finds the distance between the two points
 
-                        if distance < best_distance:
+                        if distance < best_distance:    # If it's the new lowest update the coordinates
                             best_distance = distance
                             coord1 = (test_coord1[0])
                             coord2 = (test_coord2[0])
 
-                cv2.line(layer, coord1, coord2, color=255, thickness=bridge_width)
-                n_bridges += 1
+                cv2.line(layer, coord1, coord2, color=255, thickness=bridge_width)  # Draw a line between the two coordinates
+                n_bridges += 1  # Count that bridge
             print(f"\rContour: {i2}/{len(bridged_fills)} - {int(round((i2 / len(bridged_fills)) * 100, 0))}%", end="")
         print(f"\nAdded {n_bridges} bridges.\n")
 
