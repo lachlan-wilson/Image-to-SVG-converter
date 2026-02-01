@@ -294,7 +294,7 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
     print("Cleaning all contours...\n")
     total_contours = 0  # Initialises a counter
     bridged_layers = []     # Initialises an empty array for the layers to go into
-    for i, layer in enumerate(layers):
+    for i, layer in enumerate(layers):  # Loops for each layer
         subtitle(f"Layer {i + 1}")
         print(f"Cleaning contours in layer {i + 1}...\n")
         layer = cv2.bitwise_not(layer)  # Inverts the layer
@@ -404,9 +404,11 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
 
                 cv2.line(layer, coord1, coord2, color=255, thickness=bridge_width)  # Draw a line between the two coordinates
                 n_bridges += 1  # Count that bridge
+                # DIsplays a message with stats
             print(f"\rContour: {i2}/{len(bridged_fills)} - {int(round((i2 / len(bridged_fills)) * 100, 0))}%", end="")
         print(f"\nAdded {n_bridges} bridges.\n")
 
+        # Fills diagonals because cv2 counts them as connected by Potrace doesn't (needs improved)
         print("Filling diagonals...")
         total_changes = 0
         while True:
@@ -458,112 +460,117 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
         print(f"Filled {total_changes} diagonals.")
 
         print(f"Saving layer {i + 1}...")
-        layer = cv2.bitwise_not(layer)
+        layer = cv2.bitwise_not(layer)  # Inverts the image
         filename = os.path.join(path, f"{image_path}_bridged_layer_{i + 1}.png")
-        cv2.imwrite(filename, layer)
+        cv2.imwrite(filename, layer)    # Writes the image to the output folder
         print(f"Saved layer {i + 1}.\n")
 
+        # Counts contours at the end to display stats
         print("Finding contours...")
         contours, hierarchy = cv2.findContours(cv2.bitwise_not(layer), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
         n_of_contours_after = 0
 
-        try:
-            hierarchy = hierarchy[0]
+        hierarchy = hierarchy[0]
 
-            for hier in hierarchy:
-                if hier[3] == -1:
-                    n_of_contours_after += 1
+        for hier in hierarchy:
+            if hier[3] == -1:
+                n_of_contours_after += 1
 
-            total_contours += n_of_contours_after
-            print(f"Found {n_of_contours_after} contours.")
-            print(f"Removed {n_of_contours_before - n_of_contours_after} contours.\n")
-
-        except:
-            print("Failed to count contours.")
+        total_contours += n_of_contours_after
+        print(f"Found {n_of_contours_after} contours.")
+        print(f"Removed {n_of_contours_before - n_of_contours_after} contours.\n")
 
         bridged_layers.append(layer)
     print("Bridged all contours.\n")
-    return bridged_layers, total_contours
+    return bridged_layers, total_contours   # Returns the layers and the total contours for stats
 
 
 # Converts each layer to an SVG
 def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width, green_background ):
     title("Converting Layers To SVGs")
 
+    # Creates a folder for the layers to go into
     print("Creating output folder...")
     path = os.path.join(output_path, "SVG_layers_folder")
     os.makedirs(path, exist_ok=True)
     print("Created output folder.\n")
 
     print("Vectorising layers...\n")
-    temp_dir = tempfile.mkdtemp(prefix="potrace_tmp_")
-    potrace_path = "/usr/local/bin/potrace"
-    for i, mask in enumerate(layers):
-        subtitle(f"Layer {i + 1}")
-        print(f"Vectorising layer {i + 1}...\n")
+    potrace_path = "/usr/local/bin/potrace"     # Absolute path of Potrace
+    # Creates a temporary file that will be used and then deleted
+    with tempfile.TemporaryDirectory(prefix="potrace_tmp_") as temp_dir:
+        for i, layer in enumerate(layers):   # Loops for each layer
+            subtitle(f"Layer {i + 1}")
+            print(f"Vectorising layer {i + 1}...\n")
 
-        print("Setting up files...")
-        temp_pbm = os.path.join(temp_dir, f"mask_{i}.pbm")
-        binary_mask = (mask > 127).astype(numpy.uint8) * 255
-        Image.fromarray(binary_mask).convert("1").save(temp_pbm)
-        svg_filename = os.path.join(path, f"{image_path}_layer_{i + 1}.svg")
-        print("Set up files.\n")
+            print("Setting up file...")
+            svg_filename = os.path.join(path, f"{image_path}_layer_{i + 1}.svg")    # Creates an appropriate filename
+            print("Set up file.\n")
 
-        if i == 0:
-            print("Making bottom layer a rectangle...")
-            svg_data = (f'''<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
- "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-<svg version="1.0" xmlns="http://www.w3.org/2000/svg"
- width="{width}.000000pt" height="{height}.000000pt" viewBox="0 0 {width}.000000 {height}.000000"
- preserveAspectRatio="xMidYMid meet">
-<metadata>
-Create by Lachlan Wilson for Nomad
-Input Pararameters: 
-    colour depth: {colour_depth}
-    Min contour area: {min_contour_area}
-    Max bridge contour area: {max_bridge_contour_area}
-    Max bridge contour distance: {max_contour_distance}
-    Bridge width: {bridge_width}
-Created using potrace 1.16, written by Peter Selinger 2001-2019
-</metadata>
-<g transform="translate(0.000000,{height}.000000) scale(1,-1)"
-fill="#000000" stroke="none">
-<rect width="{width}" height="{height}" x="0" y="0" />
-</g>
-</svg>''')
-            with open(svg_filename, "w", encoding="utf-8") as f:
-                f.write(svg_data)
+            if i == 0:  # If it's the bottom layer
+                print("Making bottom layer a rectangle...")
+                # SVG code for a rectangle that aligns with Potrace formatting
+                svg_data = (f'''<?xml version="1.0" standalone="no"?>
+    <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
+     "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+    <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
+     width="{width}.000000pt" height="{height}.000000pt" viewBox="0 0 {width}.000000 {height}.000000"
+     preserveAspectRatio="xMidYMid meet">
+    <metadata>
+    Create by Lachlan Wilson
+    Input Pararameters: 
+        colour depth: {colour_depth}
+        Min contour area: {min_contour_area}
+        Max bridge contour area: {max_bridge_contour_area}
+        Max bridge contour distance: {max_contour_distance}
+        Bridge width: {bridge_width}
+    Created using potrace 1.16, written by Peter Selinger 2001-2019
+    </metadata>
+    <g transform="translate(0.000000,{height}.000000) scale(1,-1)"
+    fill="#000000" stroke="none">
+    <rect width="{width}" height="{height}" x="0" y="0" />
+    </g>
+    </svg>''')
+                # Opens the file, writes the data and closes it
+                with open(svg_filename, "w", encoding="utf-8") as f:
+                    f.write(svg_data)
 
-            print("Made bottom layer a rectangle.\n")
+                print("Made bottom layer a rectangle.\n")
 
-        else:
-            print("Converting PNG to SVG using Potrace...")
-            arguments = [
-                potrace_path,
-                temp_pbm,
-                "-s",
-                "-o",
-                svg_filename,
-                "--alphamax",
-                "1.2",
-                "--turdsize",
-                "2"
-            ]
-            subprocess.run(arguments, check=True)
-            print("Converted PNG to SVG using Potrace.\n")
+            else:
+                print("Converting PNG to SVG using Potrace...")
+
+                print("Setting up temporary files...")
+                temp_pbm = os.path.join(temp_dir, f"mask_{i}.pbm")  # Creates an empty bitmap file in the temporary folder
+                Image.fromarray(layer).convert("1").save(temp_pbm)  # Turns the array into a pbm file and saves it
+                print("Set up temporary files.\n")
+
+                arguments = [
+                    potrace_path,
+                    temp_pbm,
+                    "-s",
+                    "-o",
+                    svg_filename,
+                    "--alphamax",
+                    "1.2",
+                    "--turdsize",
+                    "2"
+                ]
+                subprocess.run(arguments, check=True)   # Runs Potrace with the given arguments
+                print("Converted PNG to SVG using Potrace.\n")
 
         print("Adding colours...")
-        RBG_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]
-        HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RBG_colour))
+        RBG_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Converts the layer's colour to RBG
+        HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RBG_colour))  # Converts the RBG colours into RGB Hex
         print(f"Layer colour:{HEX_colour}")
-        svg_data = open(svg_filename).read()
-        svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')
+        with open(svg_filename).read() as svg_data:
+            svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')   # Replaces the colour value with the correct colour
         print("Added colours.\n")
 
         print(f"Vectorised layer {i + 1}.\n")
 
         print(f"Saving layer {i+1}...")
+        # Writes the data to the file
         with open(svg_filename, "w", encoding="utf-8") as f:
             f.write(svg_data)
         print(f"Saved layer {i + 1}.\n")
