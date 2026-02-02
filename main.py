@@ -46,9 +46,18 @@ def get_inputs():
     defaults = ["test_image", 2, "n", 5, 100, 30, 1]
 
     # Gets Image Path
-    image_path = input(f"Image path (.jpg) [{defaults[0]}]: ") or defaults[0]
-    # Ensures the path exists
-    while not os.path.exists(f"{os.path.join('Images', image_path)}.jpg"):
+    image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
+    # Initialises an array with all the supported extensions
+    supported_extensions = [".jpeg", ".jpg", ".png", ".bmp", ".webp", ".heic", ".heif"]
+    valid = False   # Initialises valid as False
+    while not valid:
+        for ext in supported_extensions:    # For each possible extension
+            if os.path.exists(f"{os.path.join('Images', image_path)}{ext}"):    # Check if it can be found
+                valid = True    # Stop the next iteration of the loop
+                image_path = image_path + ext   # Stores the found image path
+        if valid:   # Stop the loop if a valid path was found
+            break
+        # Get a new input
         print("\033[91mError.File not found. Please enter a valid file path.\033[0m")
         image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
 
