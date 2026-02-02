@@ -103,7 +103,7 @@ def get_inputs():
             max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[5]}]: ") or defaults[5])
             while max_contour_distance < 0:
                 print("\033[91mError. Invalid real number. Please enter a positive real number.\033[0m")
-                max_contour_distance = int(input(f"Maximum contour area (mm) [{defaults[5]}: ") or defaults[5])
+                max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[5]}]: ") or defaults[5])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -381,8 +381,8 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
             best_distance = float("inf")    # Initialises the best distance as infinity
 
             for contour, contour_center in zip(contours, contour_centers):  # Check against every other contour
-                if contour_center == (None, None):  # Skipp if no centre was found
-                    break
+                if contour_center == (None, None):  # Skip if no centre was found
+                    continue
                 distance = get_distance(bridged_fill_center, contour_center)    # finds the distance between the centers
 
                 # If this is the new lowest distance that's not the distance between itself
@@ -395,7 +395,7 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
                 best_distance = float("inf")    # Initialises a new best distance for each point as infinity
                 for test_coord1 in bridged_fill:    # For each point in the bridged contour
                     for test_coord2 in nearest_contour:     # For each point in the nearest contour
-                        distance = get_distance(test_coord1[0], test_coord2[0]) # Finds the distance between the two points
+                        distance = get_distance(test_coord1[0], test_coord2[0])     # Finds the distance between the two points
 
                         if distance < best_distance:    # If it's the new lowest update the coordinates
                             best_distance = distance
@@ -560,8 +560,8 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
                 print("Converted PNG to SVG using Potrace.\n")
 
         print("Adding colours...")
-        RBG_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Converts the layer's colour to RBG
-        HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RBG_colour))  # Converts the RBG colours into RGB Hex
+        RGB_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Converts the layer's colour to RGB
+        HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RGB_colour))  # Converts the RGB colours into RGB Hex
         print(f"Layer colour:{HEX_colour}")
         with open(svg_filename, "r", encoding="utf-8") as svg_data:
             svg_data = svg_data.read()
