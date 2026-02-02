@@ -559,14 +559,14 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
                 subprocess.run(arguments, check=True)   # Runs Potrace with the given arguments
                 print("Converted PNG to SVG using Potrace.\n")
 
-        print("Adding colours...")
-        RGB_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Converts the layer's colour to RGB
-        HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RGB_colour))  # Converts the RGB colours into RGB Hex
-        print(f"Layer colour:{HEX_colour}")
-        with open(svg_filename, "r", encoding="utf-8") as svg_data:
-            svg_data = svg_data.read()
-            svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')   # Replaces the colour value with the correct colour
-        print("Added colours.\n")
+            print("Adding colours...")
+            RGB_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Converts the layer's colour to RGB
+            HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RGB_colour))  # Converts the RGB colours into RGB Hex
+            print(f"Layer colour:{HEX_colour}")
+            with open(svg_filename, "r", encoding="utf-8") as svg_data:
+                svg_data = svg_data.read()
+                svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')   # Replaces the colour value with the correct colour
+            print("Added colours.\n")
 
         print(f"Vectorised layer {i + 1}.\n")
 
