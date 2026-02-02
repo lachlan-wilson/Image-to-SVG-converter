@@ -3,7 +3,7 @@
 import os
 import tempfile
 import subprocess
-from PIL import Image
+from PIL import Image, ImageOps
 import cv2
 import numpy
 from sklearn.cluster import MiniBatchKMeans
@@ -138,13 +138,24 @@ def load_image(image_path):
     title("Loading Image")
 
     print("Loading image...")
-    # Stores image as a numpy array
-    image = cv2.imread(f"{os.path.join('Images', image_path)}.jpg")
+    image = Image.open(os.path.join('Images', image_path))  # Open image
+    image = ImageOps.exif_transpose(image)  # Ensures image is correctly orientated
+
+    has_alpha = ("A" in image.getbands()) or ("transparency" in image.info)     # Determines whether the image has an alpha channel
+    image = image.convert("RGBA" if has_alpha else "RGB")   # Converts the image to RGBA or RGB
+    image = numpy.array(image)
+
+    if has_alpha:
+        alpha_channel = image[..., 3]
+        mask = alpha_channel < 255
+        image = image[..., :3]
+        image[mask] = [112, 254, 29]
+
     print("Loaded Image.\n")
 
     print("Creating output folder...")
     # Creates a folder with the same name as the image
-    output_path = f"{image_path}_output"
+    output_path = f"{image_path[:image_path.rfind('.')]}_output"
     os.makedirs(output_path, exist_ok=True)
     print("Created output folder.\n")
 
