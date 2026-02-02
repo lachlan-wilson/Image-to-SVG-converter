@@ -563,7 +563,8 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
         RBG_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Converts the layer's colour to RBG
         HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RBG_colour))  # Converts the RBG colours into RGB Hex
         print(f"Layer colour:{HEX_colour}")
-        with open(svg_filename).read() as svg_data:
+        with open(svg_filename, "r", encoding="utf-8") as svg_data:
+            svg_data = svg_data.read()
             svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')   # Replaces the colour value with the correct colour
         print("Added colours.\n")
 
@@ -583,10 +584,11 @@ def combine_svgs(image_path, output_path, colour_depth):
     title("Combining SVGs")
 
     print("Formatting layers...\n")
-    combined_svg_code = ""
-    for i in range(colour_depth):
+    combined_svg_code = ""  # Inititalises an empty string for the combined code
+    for i in range(colour_depth):   # Loops for each colour/layer
         subtitle(f"Layer {i+1}")
 
+        # Opens the file containing the code for that layer
         print("Opening file...")
         svg_filename = os.path.join(output_path, "SVG_layers_folder", f"{image_path}_layer_{i + 1}.svg")
         with open(svg_filename, "r", encoding="utf-8") as file:
@@ -594,32 +596,35 @@ def combine_svgs(image_path, output_path, colour_depth):
         print("Opened file.\n")
 
         print("Formatting code...")
-        substring_index = svg_code.find("</metadata>") + 12
-        svg_root = svg_code[:substring_index]
-        svg_code = svg_code[substring_index:-6]
+        substring_index = svg_code.find("</metadata>") + 12     # Finds the index of the start of the path code
+        # Takes the root (beginning) of the SVG code and stores it to be appended later
+        if i == 0:
+            svg_root = svg_code[:substring_index]
+        svg_code = svg_code[substring_index:-6]     # Stores the actual SVG code with all the paths.
         print("Formatted code.\n")
 
         print("Appending code...")
-        combined_svg_code += svg_code
+        combined_svg_code += svg_code   # Appends this layers paths
         print("Appended code.\n")
 
     print("Formatted layers.\n")
 
-    combined_svg_code = svg_root + combined_svg_code + "</svg>"
+    combined_svg_code = svg_root + combined_svg_code + "</svg>"     # Combines the paths with the root and closes the section
 
-    combined_svg_code = combined_svg_code.replace("<<", "<")
+    combined_svg_code = combined_svg_code.replace("<<", "<")    # Fixes discrepancies
 
     print("Saving layers...")
+    # Writes the code to the file
     svg_filename = os.path.join(output_path, f"{image_path}_combined.svg")
     with open(svg_filename, "w", encoding="utf-8") as file:
         file.write(combined_svg_code)
     print("Saved layers.\n")
 
 
-# main code
+# Calls the appropriate functions with the appropraite arguments
 def main():
     image_path, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width, green_background = get_inputs()
-    start = time.perf_counter()
+    start = time.perf_counter()     # Starts the timer once the inputs have been given
     image, output_path = load_image(image_path)
     max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width = scale_parameters(image, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
     image, colour_groups, pixel_labels, colour_groups_order, height, width = quantise_image(image, colour_depth, image_path, output_path, green_background)
@@ -628,7 +633,7 @@ def main():
     convert_layers_to_svg(bridged_layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width, green_background)
     combine_svgs(image_path, output_path, colour_depth)
 
-    end = time.perf_counter()
+    end = time.perf_counter()   # Stops the timer and displays the results
     print(f"Time: {end - start:.6f} seconds.\n")
     print(f"Total contours: {total_contours}.\n")
     title("Complete")
