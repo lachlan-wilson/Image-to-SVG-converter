@@ -8,6 +8,7 @@ import cv2
 import numpy
 from sklearn.cluster import MiniBatchKMeans
 import time
+import shutil
 
 
 # Turns a string into a title with a constant width
@@ -43,7 +44,7 @@ def get_inputs():
     title("Inputs")
 
     # Sets the default values for easier changing
-    defaults = ["test_image", 2, "n", 5, 100, 30, 1]
+    defaults = ["test_image", 8, "y", 5, 100, 30, 1]
 
     # Gets Image Path
     image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
@@ -51,10 +52,14 @@ def get_inputs():
     supported_extensions = [".jpeg", ".jpg", ".png", ".bmp", ".webp", ".heic", ".heif"]
     valid = False   # Initialises valid as False
     while not valid:
-        for ext in supported_extensions:    # For each possible extension
-            if os.path.exists(f"{os.path.join('Images', image_path)}{ext}"):    # Check if it can be found
-                valid = True    # Stop the next iteration of the loop
-                image_path = image_path + ext   # Stores the found image path
+        if image_path[image_path.rfind("."):] in supported_extensions:  # If the path already has an extension
+            if os.path.exists(f"{os.path.join('Images', image_path)}"):     # Check if it can be found
+                valid = True  # Stop the next iteration of the loop
+        else:
+            for ext in supported_extensions:    # For each possible extension
+                if os.path.exists(f"{os.path.join('Images', image_path)}{ext}"):    # Check if it can be found
+                    valid = True    # Stop the next iteration of the loop
+                    image_path = image_path + ext   # Stores the found image path
         if valid:   # Stop the loop if a valid path was found
             break
         # Get a new input
@@ -156,13 +161,15 @@ def load_image(image_path):
     print("Creating output folder...")
     # Creates a folder with the same name as the image
     output_path = f"{image_path[:image_path.rfind('.')]}_output"
-    os.makedirs(output_path, exist_ok=True)
-    print("Created output folder.\n")
 
-    print("Converting image to RBG...")
-    # Converts image to RGB colour space
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    print("Converted image to RGB.\n")
+    if os.path.exists(output_path):
+        if os.path.isdir(output_path):
+            shutil.rmtree(output_path)
+        else:
+            os.remove(output_path)
+
+    os.makedirs(output_path, exist_ok = False)
+    print("Created output folder.\n")
 
     return image, output_path
 
@@ -647,6 +654,7 @@ def main():
     start = time.perf_counter()     # Starts the timer once the inputs have been given
     image, output_path = load_image(image_path)
     max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width = scale_parameters(image, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
+    image_path = image_path[:image_path.rfind(".")]     # Changes the image path so to avoid .ext.ext files
     image, colour_groups, pixel_labels, colour_groups_order, height, width = quantise_image(image, colour_depth, image_path, output_path, green_background)
     layers = build_binary_layers(pixel_labels, image_path, output_path, colour_depth)
     bridged_layers, total_contours = clean_contours(layers, image_path, output_path, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
