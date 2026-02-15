@@ -44,7 +44,7 @@ def get_inputs():
     title("Inputs")
 
     # Sets the default values for easier changing
-    defaults = ["Clicker_side_green", 8, "y", 5, 100, 30, 1]
+    defaults = ["Clicker_side_green", 8, 5, 100, 30, 1]
 
     # Gets Image Path
     image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
@@ -85,10 +85,10 @@ def get_inputs():
     # Gets Minimum contour Area
     while True:
         try:
-            min_contour_area = int(input(f"Minimum contour area (mm\u00b2) [{defaults[3]}]: ") or defaults[3])
+            min_contour_area = int(input(f"Minimum contour area (mm\u00b2) [{defaults[2]}]: ") or defaults[2])
             while min_contour_area < 0:
                 print("\033[91mError. Invalid real number. Please enter a positive real number.\033[0m")
-                min_contour_area = int(input(f"Minimum contour area (mm\u00b2) [{defaults[3]}]: ") or defaults[3])
+                min_contour_area = int(input(f"Minimum contour area (mm\u00b2) [{defaults[2]}]: ") or defaults[2])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -96,10 +96,10 @@ def get_inputs():
     # Gets Maximum Bridge contour Area
     while True:
         try:
-            max_bridge_contour_area = int(input(f"Maximum bridge contour area (mm\u00b2) [{defaults[4]}]: ") or defaults[4])
+            max_bridge_contour_area = int(input(f"Maximum bridge contour area (mm\u00b2) [{defaults[3]}]: ") or defaults[3])
             while max_bridge_contour_area < 0:
                 print("\033[91mError. Invalid real number. Please enter a positive real number.\033[0m")
-                max_bridge_contour_area = int(input(f"Maximum bridge contour area (mm\u00b2) [{defaults[4]}]: ") or defaults[4])
+                max_bridge_contour_area = int(input(f"Maximum bridge contour area (mm\u00b2) [{defaults[3]}]: ") or defaults[3])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -107,10 +107,10 @@ def get_inputs():
     # Gets Maximum contour Distance
     while True:
         try:
-            max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[5]}]: ") or defaults[5])
+            max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[4]}]: ") or defaults[4])
             while max_contour_distance < 0:
                 print("\033[91mError. Invalid real number. Please enter a positive real number.\033[0m")
-                max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[5]}]: ") or defaults[5])
+                max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[4]}]: ") or defaults[4])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -118,10 +118,10 @@ def get_inputs():
     # Gets Bridge Width
     while True:
         try:
-            bridge_width = float(input(f"Bridge Width (mm) [{defaults[6]}]: ") or defaults[6])
+            bridge_width = float(input(f"Bridge Width (mm) [{defaults[5]}]: ") or defaults[5])
             while bridge_width <= 0:
                 print("\033[91mError. Invalid real number. Please enter a real number above 0.\033[0m")
-                bridge_width = int(input(f"Bridge Width (mm) [{defaults[6]}]: ") or defaults[6])
+                bridge_width = int(input(f"Bridge Width (mm) [{defaults[5]}]: ") or defaults[5])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -179,55 +179,47 @@ def scale_parameters(image, max_bridge_contour_area, min_contour_area, max_conto
 def quantise_image(image, colour_depth, image_path, output_path):
     title("Quantising Image")
 
+    print("Selecting transparent pixels...")
+    image = image.reshape((-1, 4)).astype(numpy.int16)
+    alpha = image[..., 3]
+    background = (alpha < 255).reshape(-1)
+    print("Selected transparent pixels.")
+
     print("Converting image to LAB...")
     # Converts the image to LAB colour space
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+    image = cv2.cvtColor(image[..., :3], cv2.COLOR_RGB2LAB)
     print("Converted image to LAB.\n")
 
     print("Reshaping image...")
     height, width = image.shape[:2]     # Gets the height and width of the image in pixels
     n_pixels = height * width
-    # Flattens array so each pixel has an index with 4 colours, int16 allows for calculating distances better
-    image = image.reshape((-1, 4)).astype(numpy.int16)
+    # Flattens array so each pixel has an index with 3 colours, int16 allows for calculating distances better
+    image = image.reshape((-1, 3)).astype(numpy.int16)
     print("Reshaped image.\n")
 
-    # If the image has a green background AKA should have a transparent background
-    alpha = image[..., 3]  # 2D array of alpha values (0..255)
-    has_transparency = (alpha < 255).any()
-    if has_transparency:
-        print("Removing background pixels...")
-        background = (alpha < 255).reshape(-1)
-        n_bg_pixels = int(numpy.sum(background))    # Counts the pixels in the array
-        image = image[~background]    # Removes what were the green pixels
-        print(f"Removed {n_bg_pixels} green background pixels.\n")
+    print("Removing background pixels...")
+    background = (alpha < 255).reshape(-1)
+    n_bg_pixels = int(numpy.sum(background))    # Counts the pixels in the array
+    image = image[~background]    # Removes what were the green pixels
+    print(f"Removed {n_bg_pixels} green background pixels.\n")
 
-        # Creates a tuple containing all the colours
-        print(f"Forming {colour_depth} colours...")
-        os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Means it only uses one CPU core?
-        # Finds the most important colours in the image excluding the background
-        kmeans = MiniBatchKMeans(n_clusters=(colour_depth-1), random_state=42, batch_size=2048, )
-        pixel_labels_no_bg = kmeans.fit_predict(image)  # Labels each pixel with its colour
-        colour_groups = kmeans.cluster_centers_
-        print(f"Formed {colour_depth} colours.\n")
+    # Creates a tuple containing all the colours
+    print(f"Forming {colour_depth} colours...")
+    os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Means it only uses one CPU core?
+    # Finds the most important colours in the image excluding the background
+    kmeans = MiniBatchKMeans(n_clusters=(colour_depth-1), random_state=42, batch_size=2048, )
+    pixel_labels_no_bg = kmeans.fit_predict(image)  # Labels each pixel with its colour
+    colour_groups = kmeans.cluster_centers_
+    print(f"Formed {colour_depth} colours.\n")
 
-        print(f"Adding background...")
-        # Creates an array the same size as the original image where each pixel has index -1 (for background)
-        pixel_labels = numpy.full((n_pixels,), fill_value=(colour_depth-1), dtype=int)
-        # Adds the correct pixel labels to the background where the green pixels where not present
-        pixel_labels[~background] = pixel_labels_no_bg
-        black = numpy.array([0, 128, 128], dtype=numpy.float64)     # Creates a black in LAB
-        colour_groups = numpy.vstack([colour_groups, black])    # Adds the black colour to the others
-        print(f"Added background.")
-
-    else:
-        # Creates a tuple containing all the colours
-        print(f"Forming {colour_depth} colours...")
-        os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Means it only uses one CPU core?
-        # Finds the most important colours in the image
-        kmeans = MiniBatchKMeans(n_clusters=colour_depth, random_state=42, batch_size=2048, )
-        pixel_labels = kmeans.fit_predict(image)    # Labels each pixel with its colour
-        colour_groups = kmeans.cluster_centers_
-        print(f"Formed {colour_depth} colours.\n")
+    print(f"Adding background...")
+    # Creates an array the same size as the original image where each pixel has index -1 (for background)
+    pixel_labels = numpy.full((n_pixels,), fill_value=(colour_depth-1), dtype=int)
+    # Adds the correct pixel labels to the background where the green pixels where not present
+    pixel_labels[~background] = pixel_labels_no_bg
+    black = numpy.array([0, 128, 128], dtype=numpy.float64)     # Creates a black in LAB
+    colour_groups = numpy.vstack([colour_groups, black])    # Adds the black colour to the others
+    print(f"Added background.")
 
     # Rebuilds the labels and colour groups to be sorted by lightness
     print("Sorting colours by lightness...")
