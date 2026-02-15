@@ -44,12 +44,12 @@ def get_inputs():
     title("Inputs")
 
     # Sets the default values for easier changing
-    defaults = ["test_image", 8, "y", 5, 100, 30, 1]
+    defaults = ["Clicker_side_green", 8, "y", 5, 100, 30, 1]
 
     # Gets Image Path
     image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
     # Initialises an array with all the supported extensions
-    supported_extensions = [".jpeg", ".jpg", ".png", ".bmp", ".webp", ".heic", ".heif"]
+    supported_extensions = [".jpeg", ".jpg", ".png"]
     valid = False   # Initialises valid as False
     while not valid:
         if image_path[image_path.rfind("."):] in supported_extensions:  # If the path already has an extension
@@ -63,7 +63,7 @@ def get_inputs():
         if valid:   # Stop the loop if a valid path was found
             break
         # Get a new input
-        print("\033[91mError.File not found. Please enter a valid file path.\033[0m")
+        print("\033[91mError. File not found. Please enter a valid file path.\033[0m")
         image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
 
     # Gets Colour Depth
@@ -81,13 +81,6 @@ def get_inputs():
                 break
             except ValueError:
                 print("\033[91mError. Invalid file type. Please enter an integer.\033[0m")
-
-    # Gets whether the image has a green background.
-    answer = input(f"Green background (y/n) [{defaults[2]}]: ") or defaults[2]
-    while not(answer == "y" or answer == "n"):
-        print('\033[91mError. Invalid input. Please enter "y" or "n" \033[0m')
-        answer = input(f"Green background (y/n) [{defaults[2]}]: ") or defaults[2]
-    green_background = True if answer == "y" else False
 
     # Gets Minimum contour Area
     while True:
@@ -135,7 +128,7 @@ def get_inputs():
 
     print("")   # Skips a line because last line could be anything
 
-    return image_path, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width, green_background
+    return image_path, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width
 
 
 # Loads image in the RBG colour space
@@ -145,17 +138,8 @@ def load_image(image_path):
     print("Loading image...")
     image = Image.open(os.path.join('Images', image_path))  # Open image
     image = ImageOps.exif_transpose(image)  # Ensures image is correctly orientated
-
-    has_alpha = ("A" in image.getbands()) or ("transparency" in image.info)     # Determines whether the image has an alpha channel
-    image = image.convert("RGBA" if has_alpha else "RGB")   # Converts the image to RGBA or RGB
+    image = image.convert("RGBA")   # Converts the image to RGBA or RGB
     image = numpy.array(image)
-
-    if has_alpha:
-        alpha_channel = image[..., 3]
-        mask = alpha_channel < 255
-        image = image[..., :3]
-        image[mask] = [112, 254, 29]
-
     print("Loaded Image.\n")
 
     print("Creating output folder...")
@@ -192,7 +176,7 @@ def scale_parameters(image, max_bridge_contour_area, min_contour_area, max_conto
 
 
 # Quantises the image (Turns it into a few colours only)
-def quantise_image(image, colour_depth, image_path, output_path, green_background):
+def quantise_image(image, colour_depth, image_path, output_path):
     title("Quantising Image")
 
     print("Converting image to LAB...")
@@ -203,20 +187,16 @@ def quantise_image(image, colour_depth, image_path, output_path, green_backgroun
     print("Reshaping image...")
     height, width = image.shape[:2]     # Gets the height and width of the image in pixels
     n_pixels = height * width
-    # Flattens array so each pixel has an index with 3 colours, int16 allows for calculating distances better
-    image = image.reshape((-1, 3)).astype(numpy.int16)
+    # Flattens array so each pixel has an index with 4 colours, int16 allows for calculating distances better
+    image = image.reshape((-1, 4)).astype(numpy.int16)
     print("Reshaped image.\n")
 
     # If the image has a green background AKA should have a transparent background
-    if green_background:
-        print("Removing green background pixels...")
-        # Defines the colour in LAB colour spaces and correct encoding
-        green_colour = numpy.array([227, 57, 210], dtype=numpy.int16)
-        green_tolerance = 10    # Adds a tolerance to account for changing encoding
-        # Creates an array holding the difference between each pixel in the image and the green colour
-        diff = numpy.abs(image - green_colour)
-        # Creates a boolean array that holds the green pixels
-        background = numpy.all(diff <= green_tolerance, axis=1)
+    alpha = image[..., 3]  # 2D array of alpha values (0..255)
+    has_transparency = (alpha < 255).any()
+    if has_transparency:
+        print("Removing background pixels...")
+        background = (alpha < 255).reshape(-1)
         n_bg_pixels = int(numpy.sum(background))    # Counts the pixels in the array
         image = image[~background]    # Removes what were the green pixels
         print(f"Removed {n_bg_pixels} green background pixels.\n")
@@ -513,7 +493,7 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
 
 
 # Converts each layer to an SVG
-def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width, green_background ):
+def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width,):
     title("Converting Layers To SVGs")
 
     # Creates a folder for the layers to go into
@@ -586,22 +566,22 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
                 subprocess.run(arguments, check=True)   # Runs Potrace with the given arguments
                 print("Converted PNG to SVG using Potrace.\n")
 
-            print("Adding colours...")
-            RGB_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Converts the layer's colour to RGB
-            HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RGB_colour))  # Converts the RGB colours into RGB Hex
-            print(f"Layer colour:{HEX_colour}")
-            with open(svg_filename, "r", encoding="utf-8") as svg_data:
-                svg_data = svg_data.read()
-                svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')   # Replaces the colour value with the correct colour
-            print("Added colours.\n")
+                print("Adding colours...")
+                RGB_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Converts the layer's colour to RGB
+                HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RGB_colour))  # Converts the RGB colours into RGB Hex
+                print(f"Layer colour:{HEX_colour}")
+                with open(svg_filename, "r", encoding="utf-8") as svg_data:
+                    svg_data = svg_data.read()
+                    svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')   # Replaces the colour value with the correct colour
+                print("Added colours.\n")
 
-        print(f"Vectorised layer {i + 1}.\n")
+                print(f"Vectorised layer {i + 1}.\n")
 
-        print(f"Saving layer {i+1}...")
-        # Writes the data to the file
-        with open(svg_filename, "w", encoding="utf-8") as f:
-            f.write(svg_data)
-        print(f"Saved layer {i + 1}.\n")
+                print(f"Saving layer {i+1}...")
+                # Writes the data to the file
+                with open(svg_filename, "w", encoding="utf-8") as f:
+                    f.write(svg_data)
+                print(f"Saved layer {i + 1}.\n")
 
     print("Vectorised layers.\n")
 
@@ -648,17 +628,17 @@ def combine_svgs(image_path, output_path, colour_depth):
     print("Saved layers.\n")
 
 
-# Calls the appropriate functions with the appropraite arguments
+# Calls the appropriate functions with the appropriate arguments
 def main():
-    image_path, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width, green_background = get_inputs()
+    image_path, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width = get_inputs()
     start = time.perf_counter()     # Starts the timer once the inputs have been given
     image, output_path = load_image(image_path)
     max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width = scale_parameters(image, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
     image_path = image_path[:image_path.rfind(".")]     # Changes the image path so to avoid .ext.ext files
-    image, colour_groups, pixel_labels, colour_groups_order, height, width = quantise_image(image, colour_depth, image_path, output_path, green_background)
+    image, colour_groups, pixel_labels, colour_groups_order, height, width = quantise_image(image, colour_depth, image_path, output_path)
     layers = build_binary_layers(pixel_labels, image_path, output_path, colour_depth)
     bridged_layers, total_contours = clean_contours(layers, image_path, output_path, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
-    convert_layers_to_svg(bridged_layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width, green_background)
+    convert_layers_to_svg(bridged_layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
     combine_svgs(image_path, output_path, colour_depth)
 
     end = time.perf_counter()   # Stops the timer and displays the results
