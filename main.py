@@ -44,7 +44,7 @@ def get_inputs():
     title("Inputs")
 
     # Sets the default values for easier changing
-    defaults = ["Clicker_side_green", 8, 5, 100, 30, 1]
+    defaults = ["Clicker_side_green_trans", 8, 5, 100, 30, 1]
 
     # Gets Image Path
     image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
@@ -180,9 +180,8 @@ def quantise_image(image, colour_depth, image_path, output_path):
     title("Quantising Image")
 
     print("Selecting transparent pixels...")
-    image = image.reshape((-1, 4)).astype(numpy.int16)
-    alpha = image[..., 3]
-    background = (alpha < 255).reshape(-1)
+    alpha = image[..., 3]   # Array of the alpha channel
+    background = (alpha < 255).reshape(-1)  # Boolean array of transparent pixels
     print("Selected transparent pixels.")
 
     print("Converting image to LAB...")
@@ -198,10 +197,9 @@ def quantise_image(image, colour_depth, image_path, output_path):
     print("Reshaped image.\n")
 
     print("Removing background pixels...")
-    background = (alpha < 255).reshape(-1)
     n_bg_pixels = int(numpy.sum(background))    # Counts the pixels in the array
-    image = image[~background]    # Removes what were the green pixels
-    print(f"Removed {n_bg_pixels} green background pixels.\n")
+    image = image[~background]    # Removes what were the transparent pixels
+    print(f"Removed {n_bg_pixels} background pixels.\n")
 
     # Creates a tuple containing all the colours
     print(f"Forming {colour_depth} colours...")
@@ -215,7 +213,7 @@ def quantise_image(image, colour_depth, image_path, output_path):
     print(f"Adding background...")
     # Creates an array the same size as the original image where each pixel has index -1 (for background)
     pixel_labels = numpy.full((n_pixels,), fill_value=(colour_depth-1), dtype=int)
-    # Adds the correct pixel labels to the background where the green pixels where not present
+    # Adds the correct pixel labels to the background where the transparent pixels where not present
     pixel_labels[~background] = pixel_labels_no_bg
     black = numpy.array([0, 128, 128], dtype=numpy.float64)     # Creates a black in LAB
     colour_groups = numpy.vstack([colour_groups, black])    # Adds the black colour to the others
