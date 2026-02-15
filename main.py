@@ -198,6 +198,7 @@ def quantise_image(image, colour_depth, image_path, output_path):
 
     print("Removing background pixels...")
     n_bg_pixels = int(numpy.sum(background))    # Counts the pixels in the array
+    colour_depth_offset = -1 if n_bg_pixels > 0 else 0  # If the image has transparent pixels remove a colour
     image = image[~background]    # Removes what were the transparent pixels
     print(f"Removed {n_bg_pixels} background pixels.\n")
 
@@ -205,19 +206,20 @@ def quantise_image(image, colour_depth, image_path, output_path):
     print(f"Forming {colour_depth} colours...")
     os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Means it only uses one CPU core?
     # Finds the most important colours in the image excluding the background
-    kmeans = MiniBatchKMeans(n_clusters=(colour_depth-1), random_state=42, batch_size=2048, )
+    kmeans = MiniBatchKMeans(n_clusters=(colour_depth + colour_depth_offset), random_state=42, batch_size=2048, )
     pixel_labels_no_bg = kmeans.fit_predict(image)  # Labels each pixel with its colour
     colour_groups = kmeans.cluster_centers_
     print(f"Formed {colour_depth} colours.\n")
 
-    print(f"Adding background...")
-    # Creates an array the same size as the original image where each pixel has index -1 (for background)
-    pixel_labels = numpy.full((n_pixels,), fill_value=(colour_depth-1), dtype=int)
-    # Adds the correct pixel labels to the background where the transparent pixels where not present
-    pixel_labels[~background] = pixel_labels_no_bg
-    black = numpy.array([0, 128, 128], dtype=numpy.float64)     # Creates a black in LAB
-    colour_groups = numpy.vstack([colour_groups, black])    # Adds the black colour to the others
-    print(f"Added background.")
+    if n_bg_pixels > 0: # If the image has transparent pixels
+        print(f"Adding background...")
+        # Creates an array the same size as the original image where each pixel has index -1 (for background)
+        pixel_labels = numpy.full((n_pixels,), fill_value=(colour_depth + colour_depth_offset), dtype=int)
+        # Adds the correct pixel labels to the background where the transparent pixels where not present
+        pixel_labels[~background] = pixel_labels_no_bg
+        black = numpy.array([0, 128, 128], dtype=numpy.float64)     # Creates a black in LAB
+        colour_groups = numpy.vstack([colour_groups, black])    # Adds the black colour to the others
+        print(f"Added background.")
 
     # Rebuilds the labels and colour groups to be sorted by lightness
     print("Sorting colours by lightness...")
