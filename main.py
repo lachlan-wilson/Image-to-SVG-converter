@@ -87,10 +87,10 @@ def get_inputs():
     # Get the minimum contour Area
     while True:
         try:
-            min_contour_area = int(input(f"Minimum contour area (mm\u00b2) [{defaults[2]}]: ") or defaults[2])
+            min_contour_area = int(input(f"Minimum contour area (px\u00b2) [{defaults[2]}]: ") or defaults[2])
             while min_contour_area < 0:
                 print("\033[91mError. Invalid real number. Please enter a positive real number.\033[0m")
-                min_contour_area = int(input(f"Minimum contour area (mm\u00b2) [{defaults[2]}]: ") or defaults[2])
+                min_contour_area = int(input(f"Minimum contour area (px\u00b2) [{defaults[2]}]: ") or defaults[2])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -98,10 +98,10 @@ def get_inputs():
     # Get the maximum bridge contour Area
     while True:
         try:
-            max_bridge_contour_area = int(input(f"Maximum bridge contour area (mm\u00b2) [{defaults[3]}]: ") or defaults[3])
+            max_bridge_contour_area = int(input(f"Maximum bridge contour area (px\u00b2) [{defaults[3]}]: ") or defaults[3])
             while max_bridge_contour_area < 0:
                 print("\033[91mError. Invalid real number. Please enter a positive real number.\033[0m")
-                max_bridge_contour_area = int(input(f"Maximum bridge contour area (mm\u00b2) [{defaults[3]}]: ") or defaults[3])
+                max_bridge_contour_area = int(input(f"Maximum bridge contour area (px\u00b2) [{defaults[3]}]: ") or defaults[3])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -109,10 +109,10 @@ def get_inputs():
     # Get the maximum contour distance
     while True:
         try:
-            max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[4]}]: ") or defaults[4])
+            max_contour_distance = int(input(f"Maximum contour distance (center to center) (px) [{defaults[4]}]: ") or defaults[4])
             while max_contour_distance < 0:
                 print("\033[91mError. Invalid real number. Please enter a positive real number.\033[0m")
-                max_contour_distance = int(input(f"Maximum contour distance (center to center) (mm) [{defaults[4]}]: ") or defaults[4])
+                max_contour_distance = int(input(f"Maximum contour distance (center to center) (px) [{defaults[4]}]: ") or defaults[4])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -120,10 +120,10 @@ def get_inputs():
     # Get the bridge width
     while True:
         try:
-            bridge_width = float(input(f"Bridge Width (mm) [{defaults[5]}]: ") or defaults[5])
+            bridge_width = float(input(f"Bridge Width (px) [{defaults[5]}]: ") or defaults[5])
             while bridge_width <= 0:
                 print("\033[91mError. Invalid real number. Please enter a real number above 0.\033[0m")
-                bridge_width = int(input(f"Bridge Width (mm) [{defaults[5]}]: ") or defaults[5])
+                bridge_width = int(input(f"Bridge Width (px) [{defaults[5]}]: ") or defaults[5])
             break
         except ValueError:
             print("\033[91mError. Invalid data type. Please enter a real number.\033[0m")
@@ -159,23 +159,6 @@ def load_image(image_path):
     print("Created output folder.\n")
 
     return image, output_path
-
-
-# Scale parameters
-def scale_parameters(image, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width):
-
-    height, width = image.shape[:2]     # Gets the height and width of the image in pixels
-
-    length_enlargement_scale_factor = height / 420  # is used to conver mm to pixels, A3 is 420mm high
-    area_enlargement_scale_factor = length_enlargement_scale_factor ** 2
-
-    # Scales distances and areas by the correct factors
-    max_bridge_contour_area = int(max_bridge_contour_area * area_enlargement_scale_factor)
-    min_contour_area = int(min_contour_area * area_enlargement_scale_factor)
-    max_contour_distance = int(max_contour_distance * length_enlargement_scale_factor)
-    bridge_width = int(bridge_width * length_enlargement_scale_factor)
-
-    return max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width
 
 
 # Quantise the image (Turn it into a few colours only)
@@ -605,7 +588,6 @@ def main():
     image_path, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width = get_inputs()
     start = time.perf_counter()     # Start the timer once the inputs have been given
     image, output_path = load_image(image_path)
-    max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width = scale_parameters(image, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
     image_path = image_path[:image_path.rfind(".")]     # Change the image path so to avoid .ext.ext files
     image, colour_groups, pixel_labels, colour_groups_order, height, width = quantise_image(image, colour_depth, image_path, output_path)
     layers = build_binary_layers(pixel_labels, image_path, output_path, colour_depth)
