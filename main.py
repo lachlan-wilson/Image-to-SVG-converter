@@ -409,55 +409,32 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
             print(f"\rContour: {i2}/{len(bridged_fills)} - {int(round((i2 / len(bridged_fills)) * 100, 0))}%", end="")
         print(f"\nAdded {n_bridges} bridges.\n")
 
-        # Fill diagonals because cv2 counts them as connected by Potrace doesn't (needs improved)
+        # Fill diagonals because cv2 counts them as connected by Potrace doesn't
         print("Filling diagonals...")
-        total_changes = 0
-        while True:
-            img = (layer == 255).astype(numpy.uint8)
+        layer_binary = (layer == 255).astype(numpy.uint8)   # A new array the same as layer but where a pixel was 255 it is now 1
 
-            # Extract shifted views (top-left 2×2 windows)
-            a = img[:-1, :-1]
-            b = img[:-1, 1:]
-            c = img[1:, :-1]
-            d = img[1:, 1:]
+        # Parallel arrays of every 2x2 square of pixels
+        a = layer_binary[:-1, :-1]
+        b = layer_binary[:-1, 1:]
+        c = layer_binary[1:, :-1]
+        d = layer_binary[1:, 1:]
 
-            # pattern1: 0 1 / 1 0  -> fill a and d
-            pattern1 = (a == 0) & (b == 1) & (c == 1) & (d == 0)
+        # An array the same size as the image but -1 in height and width because it's for each 2x2 square, if the square is a diagonal it's set to True
+        pattern1 = (a == 0) & (b == 1) & (c == 1) & (d == 0)
 
-            # pattern2: 1 0 / 0 1  -> fill b and c
-            pattern2 = (a == 1) & (b == 0) & (c == 0) & (d == 1)
+        # Same but for the second diagonal pattern
+        pattern2 = (a == 1) & (b == 0) & (c == 0) & (d == 1)
 
-            # Combine the masks (True = we must fill both diagonals)
-            mask = pattern1 | pattern2
+        mask = pattern1 | pattern2  # An array the same size as a patter but True if either of the patterns are True
 
-            if not numpy.any(mask):
-                break
+        # Sets the pixels that are in any 2x2 square that was diagonal to be filled
+        layer_binary[:-1, :-1][mask] = 1
+        layer_binary[:-1, 1:][mask] = 1
+        layer_binary[1:, :-1][mask] = 1
+        layer_binary[1:, 1:][mask] = 1
 
-            changes = 0
-            if numpy.any(pattern1):
-                # set a and d to 1 where pattern1 is True
-                # note: use copy-on-write semantics to avoid unintended overlap issues
-                idx = numpy.nonzero(pattern1)
-                img[:-1, :-1][idx] = 1
-                img[1:, 1:][idx] = 1
-                changes += idx[0].size * 2  # two pixels per match
-            if numpy.any(pattern2):
-                idx = numpy.nonzero(pattern2)
-                img[:-1, 1:][idx] = 1
-                img[1:, :-1][idx] = 1
-                changes += idx[0].size * 2
-
-            total_changes += changes
-            # Create a copy to modify
-            fixed = img.copy()
-
-            # Fill the diagonal pixels
-            # For pattern1 and pattern2, fill both diagonal positions
-            fixed[:-1, :-1][mask] = 1
-            fixed[1:, 1:][mask] = 1
-
-            # Convert back to 0/255 format
-            layer = (fixed * 255).astype(numpy.uint8)
+        total_changes = int(numpy.sum(mask))    # The number of Trues in the mask
+        layer = (layer_binary * 255).astype(numpy.uint8)    # Change it back to an array of 0s and 255s
         print(f"Filled {total_changes} diagonals.")
 
         print(f"Saving layer {i + 1}...")
