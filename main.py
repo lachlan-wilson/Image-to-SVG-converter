@@ -189,7 +189,6 @@ def quantise_image(image, colour_depth, image_path, output_path):
 
     # Create a tuple containing all the colours and an array referencing those colours
     print(f"Forming {colour_depth} colours...")
-    os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Only use one CPU core?
     # Find the most important colours in the image
     kmeans = MiniBatchKMeans(n_clusters=(colour_depth + colour_depth_offset), random_state=42, batch_size=2048, )
     pixel_labels = kmeans.fit_predict(image)  # Label each pixel with its colour
