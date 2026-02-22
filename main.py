@@ -461,6 +461,8 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
     print("Vectorising layers...\n")
     potrace_path = "/usr/local/bin/potrace"     # Absolute path of Potrace
     # Create a temporary file that will be used and then deleted
+
+    all_svg_data = [] # Initialise an empty array for svg data to go into.
     with tempfile.TemporaryDirectory(prefix="potrace_tmp_") as temp_dir:
         for i, layer in enumerate(layers):   # Loop for each layer
             subtitle(f"Layer {i + 1}")
@@ -500,6 +502,8 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
                     f.write(svg_data)
 
                 print("Made bottom layer a rectangle.\n")
+
+                all_svg_data.append(svg_data)   # Adds this layer's svg data to the total
 
             else:   # If it's not the bottom layer
                 print("Converting PNG to SVG using Potrace...")
@@ -541,11 +545,13 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
                     f.write(svg_data)
                 print(f"Saved layer {i + 1}.\n")
 
-    print("Vectorised layers.\n")
+                all_svg_data.append(svg_data)   # Adds this layer's svg data to the total
 
+    print("Vectorised layers.\n")
+    return all_svg_data
 
 # Combine and saves the SVG layers
-def combine_svgs(image_path, output_path, colour_depth):
+def combine_svgs(image_path, output_path, colour_depth, svg_data):
     title("Combining SVGs")
 
     print("Formatting layers...\n")
@@ -553,12 +559,14 @@ def combine_svgs(image_path, output_path, colour_depth):
     for i in range(colour_depth):   # Loop for each colour/layer
         subtitle(f"Layer {i+1}")
 
-        # Open the file containing the code for that layer
-        print("Opening file...")
-        svg_filename = os.path.join(output_path, "SVG_layers_folder", f"{image_path}_layer_{i + 1}.svg")
-        with open(svg_filename, "r", encoding="utf-8") as file:
-            svg_code = file.read()
-        print("Opened file.\n")
+        # # Open the file containing the code for that layer
+        # print("Opening file...")
+        # svg_filename = os.path.join(output_path, "SVG_layers_folder", f"{image_path}_layer_{i + 1}.svg")
+        # with open(svg_filename, "r", encoding="utf-8") as file:
+        #     svg_code = file.read()
+        # print("Opened file.\n")
+
+        svg_code = svg_data[i]
 
         print("Formatting code...")
         substring_index = svg_code.find("</metadata>") + 12     # Index of the start of the path code
@@ -595,8 +603,8 @@ def main():
     image, colour_groups, pixel_labels, colour_groups_order, height, width = quantise_image(image, colour_depth, image_path, output_path)
     layers = build_binary_layers(pixel_labels, image_path, output_path, colour_depth)
     bridged_layers, total_contours = clean_contours(layers, image_path, output_path, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
-    convert_layers_to_svg(bridged_layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
-    combine_svgs(image_path, output_path, colour_depth)
+    svg_data = convert_layers_to_svg(bridged_layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
+    combine_svgs(image_path, output_path, colour_depth, svg_data)
 
     end = time.perf_counter()   # Stop the timer and display the results
     print(f"Time: {end - start:.6f} seconds.\n")
