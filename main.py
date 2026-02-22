@@ -551,46 +551,39 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
     return all_svg_data
 
 # Combine and saves the SVG layers
-def combine_svgs(image_path, output_path, colour_depth, svg_data):
+def combine_svgs(image_path, output_path, colour_depth, all_svg_data):
     title("Combining SVGs")
 
     print("Formatting layers...\n")
-    combined_svg_code = ""  # Initialise an empty string for the combined code
+    combined_svg_data = ""  # Initialise an empty string for the combined code
     for i in range(colour_depth):   # Loop for each colour/layer
         subtitle(f"Layer {i+1}")
 
-        # # Open the file containing the code for that layer
-        # print("Opening file...")
-        # svg_filename = os.path.join(output_path, "SVG_layers_folder", f"{image_path}_layer_{i + 1}.svg")
-        # with open(svg_filename, "r", encoding="utf-8") as file:
-        #     svg_code = file.read()
-        # print("Opened file.\n")
-
-        svg_code = svg_data[i]
+        svg_data = all_svg_data[i]  # Get the svg code for this layer
 
         print("Formatting code...")
-        substring_index = svg_code.find("</metadata>") + 12     # Index of the start of the path code
+        substring_index = svg_data.find("</metadata>") + 12     # Index of the start of the path code
         if i == 0:  # If it's the bottom layer
             # Take the root (beginning) of the SVG code and stores it to be appended later
-            svg_root = svg_code[:substring_index]
-        svg_code = svg_code[substring_index:-6]     # Stores the actual SVG code with all the paths.
+            svg_root = svg_data[:substring_index]
+        svg_data = svg_data[substring_index:-6]     # Stores the actual SVG code with all the paths.
         print("Formatted code.\n")
 
         print("Appending code...")
-        combined_svg_code += svg_code   # Append this layer's paths
+        combined_svg_data += svg_data   # Append this layer's paths
         print("Appended code.\n")
 
     print("Formatted layers.\n")
 
-    combined_svg_code = svg_root + combined_svg_code + "</svg>"     # Combine the paths with the root and close the section
+    combined_svg_data = svg_root + combined_svg_data + "</svg>"     # Combine the paths with the root and close the section
 
-    combined_svg_code = combined_svg_code.replace("<<", "<")    # Fixe discrepancies
+    combined_svg_data = combined_svg_data.replace("<<", "<")    # Fixe discrepancies
 
     print("Saving layers...")
     # Write the code to the file
     svg_filename = os.path.join(output_path, f"{image_path}_combined.svg")
     with open(svg_filename, "w", encoding="utf-8") as file:
-        file.write(combined_svg_code)
+        file.write(combined_svg_data)
     print("Saved layers.\n")
 
 
@@ -603,8 +596,8 @@ def main():
     image, colour_groups, pixel_labels, colour_groups_order, height, width = quantise_image(image, colour_depth, image_path, output_path)
     layers = build_binary_layers(pixel_labels, image_path, output_path, colour_depth)
     bridged_layers, total_contours = clean_contours(layers, image_path, output_path, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
-    svg_data = convert_layers_to_svg(bridged_layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
-    combine_svgs(image_path, output_path, colour_depth, svg_data)
+    all_svg_data = convert_layers_to_svg(bridged_layers, image_path, colour_groups, output_path, height, width, colour_depth, max_bridge_contour_area, min_contour_area, max_contour_distance, bridge_width)
+    combine_svgs(image_path, output_path, colour_depth, all_svg_data)
 
     end = time.perf_counter()   # Stop the timer and display the results
     print(f"Time: {end - start:.6f} seconds.\n")
