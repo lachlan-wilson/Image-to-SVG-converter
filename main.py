@@ -44,7 +44,7 @@ def get_inputs():
     title("Inputs")
 
     # Set the default values for easier changing
-    defaults = ["Clicker_side_green_trans", 8, 5, 100, 30, 1]
+    defaults = ["test_image", 2, 5, 100, 30, 1]
 
     # Get Image Path
     image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
@@ -245,15 +245,18 @@ def build_binary_layers(pixel_labels, image_path, output_path, colour_depth):
 
     print("Building & saving layers...\n")
     layers = []     # Initialise an empty array for the layers to go into
+
+    layer = (pixel_labels >= 0).astype(numpy.uint8) * 255 # A full array of the correct size, same as the bottom layer.
+    layer = cv2.bitwise_not(layer)  # Invert the layer
+
     for i in range(colour_depth):   # Loop for each colour
         subtitle(f"Layer {i+1}")
 
         print(f"Building layer {i + 1}...")
-        # Create a layer with only the pixels in the relevant colour
-        layer = numpy.isin(pixel_labels, numpy.arange(i, colour_depth))
-        layer = (layer.astype(numpy.uint8) * 255)   # Make these pixels white (for binary layers)
-        layer = cv2.bitwise_not(layer)  # Invert the layer
-        layers.append(layer)    # Add the layer to the layers array
+        if i > 0:   # If it's not the bottom layer
+            layer[pixel_labels == i - 1] = 255  # Remove the colour below this one
+
+        layers.append(layer.copy())    # Add the layer to the layers array, layer.copy() is used because of the way arrays are stored in memory
         print(f"Built layer {i+1}.\n")
 
         # Write the layer to the output folder
