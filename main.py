@@ -192,7 +192,7 @@ def quantise_image(image, colour_depth, image_path, output_path):
     os.environ['LOKY_MAX_CPU_COUNT'] = '1'  # Only use one CPU core?
     # Find the most important colours in the image
     kmeans = MiniBatchKMeans(n_clusters=(colour_depth + colour_depth_offset), random_state=42, batch_size=2048, )
-    pixel_labels_no_bg = kmeans.fit_predict(image)  # Label each pixel with its colour
+    pixel_labels = kmeans.fit_predict(image)  # Label each pixel with its colour
     colour_groups = kmeans.cluster_centers_     # Create a tuple to store the colours
     print(f"Formed {colour_depth} colours.\n")
 
@@ -201,7 +201,7 @@ def quantise_image(image, colour_depth, image_path, output_path):
         # Create an array the same size as the original image where each pixel has an index of -1 (for the background)
         pixel_labels = numpy.full((n_pixels,), fill_value=(colour_depth + colour_depth_offset), dtype=int)
         # Add the correct pixel labels to the background where the transparent pixels where not present
-        pixel_labels[~background] = pixel_labels_no_bg
+        pixel_labels[~background] = pixel_labels
         black = numpy.array([0, 128, 128], dtype=numpy.float64)     # Black in LAB
         colour_groups = numpy.vstack([colour_groups, black])    # Add the black colour to the others
         print(f"Added background.")
@@ -475,7 +475,8 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
     <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
      "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
     <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
-     width="{width}.000000pt" height="{height}.000000pt" viewBox="0 0 {width}.000000 {height}.000000"
+     width="100%" height="100%"
+     viewBox="0 0 {width}.000000 {height}.000000"
      preserveAspectRatio="xMidYMid meet">
     <metadata>
     Create by Lachlan Wilson
