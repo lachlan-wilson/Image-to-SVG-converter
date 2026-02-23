@@ -9,6 +9,7 @@ import numpy
 from sklearn.cluster import MiniBatchKMeans
 import time
 import shutil
+potrace_path = "/usr/local/bin/potrace"     # Absolute path of Potrace
 
 
 # Turn a string into a title with a constant width
@@ -44,7 +45,7 @@ def get_inputs():
     title("Inputs")
 
     # Set the default values for easier changing
-    defaults = ["test_image", 2, 5, 100, 30, 1]
+    defaults = ["test_image", 8, 5, 100, 30, 1]
 
     # Get Image Path
     image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
@@ -120,7 +121,7 @@ def get_inputs():
     # Get the bridge width
     while True:
         try:
-            bridge_width = float(input(f"Bridge Width (px) [{defaults[5]}]: ") or defaults[5])
+            bridge_width = int(input(f"Bridge Width (px) [{defaults[5]}]: ") or defaults[5])
             while bridge_width <= 0:
                 print("\033[91mError. Invalid real number. Please enter a real number above 0.\033[0m")
                 bridge_width = int(input(f"Bridge Width (px) [{defaults[5]}]: ") or defaults[5])
@@ -459,7 +460,6 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
     print("Created output folder.\n")
 
     print("Vectorising layers...\n")
-    potrace_path = "/usr/local/bin/potrace"     # Absolute path of Potrace
     # Create a temporary file that will be used and then deleted
 
     all_svg_data = [] # Initialise an empty array for svg data to go into.
