@@ -134,10 +134,10 @@ Image-to-SVG-converter/
     │   └── test_image_bridged_layer_1.png     # Layer 1
     │       ...
     └── PNG_layers_folder/
-    │   └── test_image_layer_1.png     # Layer 1
+    │   └── test_image_layer_1.png             # Layer 1
     │       ...
     └── SVG_layers_folder/
-        └── test_image_layer_1.png     # Layer 1
+        └── test_image_layer_1.png             # Layer 1
             ...
 ```
 ## License
