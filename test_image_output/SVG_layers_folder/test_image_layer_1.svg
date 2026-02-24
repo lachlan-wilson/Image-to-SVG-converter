@@ -8,8 +8,8 @@
     <metadata>
     Create by Lachlan Wilson
     Input Pararameters: 
-        colour depth: 2
-        Min contour area: 5
+        colour depth: 8
+        Min contour area: 50
         Max bridge contour area: 100
         Max bridge contour distance: 30
         Bridge width: 1
