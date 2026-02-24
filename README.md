@@ -123,11 +123,15 @@ Image-to-SVG-converter/
 │   └── test_image.jpg                         # Basic image that can be used to test the program
 └── test_image_output/                         # Output folder
     ├── Quantised_test_image.jpg               # Quantised image
+    ├── test_image_combined.svg                # Final SVG
     ├── PNG_cleaned_layers_folder/             
     │   └── test_image_bridged_layer_1.png     # Layer 1
     │       ...
     └── PNG_layers_folder/
-        └── test_image_bridged_layer_1.png     # Layer 1
+    │   └── test_image_layer_1.png     # Layer 1
+    │       ...
+    └── SVG_layers_folder/
+        └── test_image_layer_1.png     # Layer 1
             ...
 ```
 ## Notes
