@@ -434,11 +434,14 @@ def clean_contours(layers, image_path, output_path, max_bridge_contour_area, min
         contours, hierarchy = cv2.findContours(cv2.bitwise_not(layer), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
         n_of_contours_after = 0
 
-        hierarchy = hierarchy[0]
+        if hierarchy is not None:
+            hierarchy = hierarchy[0]
 
-        for hier in hierarchy:
-            if hier[3] == -1:
-                n_of_contours_after += 1
+            for hier in hierarchy:
+                if hier[3] == -1:
+                    n_of_contours_after += 1
+        else:
+            n_of_contours_after = 0
 
         total_contours += n_of_contours_after
         print(f"Found {n_of_contours_after} contours.")
