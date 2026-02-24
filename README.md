@@ -66,7 +66,7 @@ To set up the environment for this project do the following:
 2. Install Potrace by downloading the latest Windows binary from [potrace.sourceforge.net](http://potrace.sourceforge.net/#downloading) and extracting it to a folder of your choice
 3. Update the `potrace_path` variable in `main.py` to point to the extracted `potrace.exe`, for example:
     ```python
-    potrace_path = "C:/potrace/potrace.exe"
+   potrace_path = "C:/potrace/potrace.exe"
     ```
 4. Clone this repository:
     ```bash

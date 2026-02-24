@@ -506,8 +506,6 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
 
                 print("Made bottom layer a rectangle.\n")
 
-                all_svg_data.append(svg_data)   # Adds this layer's svg data to the total
-
             else:   # If it's not the bottom layer
                 print("Converting PNG to SVG using Potrace...")
 
@@ -531,24 +529,24 @@ def convert_layers_to_svg(layers, image_path, colour_groups, output_path, height
                 subprocess.run(arguments, check=True)   # Run Potrace with the given arguments
                 print("Converted PNG to SVG using Potrace.\n")
 
-                print("Adding colours...")
-                RGB_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Convert the layer's colour to RGB
-                HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RGB_colour))  # Convert the RGB colours into RGB Hex
-                print(f"Layer colour:{HEX_colour}")
-                with open(svg_filename, "r", encoding="utf-8") as svg_data: # Open the SVG file
-                    svg_data = svg_data.read()  # Read its contents
-                    svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')   # Replace the colour value with the correct colour
-                print("Added colours.\n")
+            print("Adding colours...")
+            RGB_colour = cv2.cvtColor(numpy.uint8([[colour_groups[i]]]), cv2.COLOR_Lab2RGB)[0][0]   # Convert the layer's colour to RGB
+            HEX_colour = ('#%02x%02x%02x' % tuple(int(c) for c in RGB_colour))  # Convert the RGB colours into RGB Hex
+            print(f"Layer colour:{HEX_colour}")
+            with open(svg_filename, "r", encoding="utf-8") as svg_data: # Open the SVG file
+                svg_data = svg_data.read()  # Read its contents
+                svg_data = svg_data.replace('fill="#000000"', f'fill="{HEX_colour}"')   # Replace the colour value with the correct colour
+            print("Added colours.\n")
 
-                print(f"Vectorised layer {i + 1}.\n")
+            print(f"Vectorised layer {i + 1}.\n")
 
-                print(f"Saving layer {i+1}...")
-                # Write the data to the file
-                with open(svg_filename, "w", encoding="utf-8") as f:
-                    f.write(svg_data)
-                print(f"Saved layer {i + 1}.\n")
+            print(f"Saving layer {i+1}...")
+            # Write the data to the file
+            with open(svg_filename, "w", encoding="utf-8") as f:
+                f.write(svg_data)
+            print(f"Saved layer {i + 1}.\n")
 
-                all_svg_data.append(svg_data)   # Adds this layer's svg data to the total
+            all_svg_data.append(svg_data)   # Adds this layer's svg data to the total
 
     print("Vectorised layers.\n")
     return all_svg_data
