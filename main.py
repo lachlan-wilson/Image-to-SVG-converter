@@ -45,7 +45,7 @@ def get_inputs():
     title("Inputs")
 
     # Set the default values for easier changing
-    defaults = ["test_image", 8, 5, 100, 30, 1]
+    defaults = ["test_image", 8, 50, 100, 30, 1]
 
     # Get Image Path
     image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
