@@ -141,6 +141,6 @@ Image-to-SVG-converter/
             ...
 ```
 ## License
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](LICENSE).
 ## Notes
 This is hopefully my first of many projects. I am more than open to feedback/tips from anyone.
