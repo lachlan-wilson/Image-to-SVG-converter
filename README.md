@@ -25,7 +25,10 @@ _**A pixel with alpha > 0 will be treated as fully transparent_
 - Pillow
 - scikit-learn
 - opencv-python
-### Environment
-I used a Conda environment through Miniforge3.
+
+Install dependecies using `pip install requirements.txt`
+### Environment Setup
+To set up the enviroment for this project do the following:
+1. 
 ## Usage
 
