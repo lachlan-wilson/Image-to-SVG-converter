@@ -29,12 +29,12 @@ _**A pixel with alpha > 0 will be treated as fully transparent_
 - scikit-learn
 - opencv-python
 
-Install dependecies:
+Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 ### Environment Setup
-To set up the enviroment for this project do the following:
+To set up the environment for this project do the following:
 #### macOS
 1. Install [Miniforge3](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh)
 2. Install Potrace using Homebrew:
@@ -119,7 +119,7 @@ To set up the enviroment for this project do the following:
 ## File Structure
 ```
 Image-to-SVG-converter/
-├── image_to_svg.py                            # The python code itslef
+├── main.py                                    # The python code itself
 ├── requirements.txt                           # Python dependencies
 ├── README.md                                  # Project documentation
 ├── examples/                                  # Folder to store example images
