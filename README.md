@@ -55,7 +55,7 @@ To set up the enviroment for this project do the following:
     ```
 6. Run the program:
     ```bash
-    python image_to_svg.py
+    python main.py
     ```
 
 #### Windows
@@ -81,7 +81,7 @@ To set up the enviroment for this project do the following:
     ```
 7. Run the program:
     ```bash
-    python image_to_svg.py
+    python main.py
     ```
 
 #### Linux
@@ -111,7 +111,7 @@ To set up the enviroment for this project do the following:
     ```
 6. Run the program:
     ```bash
-    python image_to_svg.py
+    python main.py
     ```
 ## File Structure
 ```

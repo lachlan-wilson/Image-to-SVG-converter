@@ -54,11 +54,11 @@ def get_inputs():
     valid = False   # Initialise valid as False
     while not valid:
         if image_path[image_path.rfind("."):] in supported_extensions:  # If the path already has an extension
-            if os.path.exists(f"{os.path.join('Images', image_path)}"):     # Check if it can be found
+            if os.path.exists(f"{os.path.join('images', image_path)}"):     # Check if it can be found
                 valid = True  # Stop the next iteration of the loop
         else:
             for ext in supported_extensions:    # For each possible extension
-                if os.path.exists(f"{os.path.join('Images', image_path)}{ext}"):    # Check if it can be found
+                if os.path.exists(f"{os.path.join('images', image_path)}{ext}"):    # Check if it can be found
                     valid = True    # Stop the next iteration of the loop
                     image_path = image_path + ext   # Stores the found image path
         if valid:   # Stop the loop if a valid path was found
@@ -139,7 +139,7 @@ def load_image(image_path):
     title("Loading Image")
 
     print("Loading image...")
-    image = Image.open(os.path.join('Images', image_path))  # Open image
+    image = Image.open(os.path.join('images', image_path))  # Open image
     image = ImageOps.exif_transpose(image)  # Ensures image is correctly orientated
     image = image.convert("RGBA")   # Convert the image to RGBA
     image = numpy.array(image)  # Conver the image to a numpy array of pixels
