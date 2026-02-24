@@ -2,8 +2,8 @@
 ## Overview
 This program was designed to easily turn images into SVGs that could then be used to make paper cut posters. It takes an image and converts it into an SVG. It first turns the image into layers of the most common colours, then it cleans these layers, removing small contours (groups of pixels) and bridging slightly larger ones. Using Potrace it then turns each layer into an SVG. The layers are then combined into one SVG.
 ## Example
-![Before and After](./examples/boat_before_and_after)
-[Example Image](./examples/boat.jpg) [Example SVG](./examples/boat_combined.svg)
+![Before and After](./examples/boat_before_and_after.png)
+[Example Image](./examples/boat.jpg)    [Example SVG](./examples/boat_combined.svg)
 ## Usage
 ### Inputting an Image
 - The image must be within the `Images` folder
@@ -140,5 +140,7 @@ Image-to-SVG-converter/
         └── test_image_layer_1.png     # Layer 1
             ...
 ```
+## License
+This project is licensed under the MIT License.
 ## Notes
 This is hopefully my first of many projects. I am more than open to feedback/tips from anyone.
