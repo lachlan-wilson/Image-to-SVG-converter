@@ -36,7 +36,9 @@ pip install -r requirements.txt
 ### Environment Setup
 To set up the environment for this project do the following:
 #### macOS
-1. Install [Miniforge3](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh)
+1. Install Miniforge3 — download the installer for your Mac:
+    - [Apple Silicon (M1/M2/M3)](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh)
+    - [Intel](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh)
 2. Install Potrace using Homebrew:
     ```bash
     brew install potrace
