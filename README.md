@@ -26,9 +26,100 @@ _**A pixel with alpha > 0 will be treated as fully transparent_
 - scikit-learn
 - opencv-python
 
-Install dependecies using `pip install requirements.txt`
+Install dependecies:
+```bash
+pip install -r requirements.txt
+```
 ### Environment Setup
 To set up the enviroment for this project do the following:
-1. 
-## Usage
+#### macOS
+1. Install [Miniforge3](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh)
+2. Install Potrace using Homebrew:
+    ```bash
+    brew install potrace
+    ```
+    If you don't have Homebrew, install it first at [brew.sh](https://brew.sh)
+3. Clone this repository:
+    ```bash
+    git clone https://github.com/lachlan-wilson/Image-to-SVG-converter.git
+    cd Image-to-SVG-converter
+    ```
+4. Create and activate a Conda environment:
+    ```bash
+    conda create -n image-to-svg python=3.11
+    conda activate image-to-svg
+    ```
+5. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+6. Run the program:
+    ```bash
+    python image_to_svg.py
+    ```
+
+#### Windows
+1. Install [Miniforge3](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe)
+2. Install Potrace by downloading the latest Windows binary from [potrace.sourceforge.net](http://potrace.sourceforge.net/#downloading) and extracting it to a folder of your choice
+3. Update the `potrace_path` variable in `main.py` to point to the extracted `potrace.exe`, for example:
+    ```python
+    potrace_path = "C:/potrace/potrace.exe"
+    ```
+4. Clone this repository:
+    ```bash
+    git clone https://github.com/lachlan-wilson/Image-to-SVG-converter.git
+    cd Image-to-SVG-converter
+    ```
+5. Open **Miniforge Prompt** from the Start Menu and create and activate a Conda environment:
+    ```bash
+    conda create -n image-to-svg python=3.11
+    conda activate image-to-svg
+    ```
+6. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+7. Run the program:
+    ```bash
+    python image_to_svg.py
+    ```
+
+#### Linux
+1. Install Miniforge3:
+    ```bash
+    wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+    bash Miniforge3-Linux-x86_64.sh
+    ```
+2. Install Potrace:
+    ```bash
+    sudo apt install potrace
+    ```
+    On non-Debian based distros (e.g. Arch, Fedora) use your package manager's equivalent command
+3. Clone this repository:
+    ```bash
+    git clone https://github.com/lachlan-wilson/Image-to-SVG-converter.git
+    cd Image-to-SVG-converter
+    ```
+4. Create and activate a Conda environment:
+    ```bash
+    conda create -n image-to-svg python=3.11
+    conda activate image-to-svg
+    ```
+5. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+6. Run the program:
+    ```bash
+    python image_to_svg.py
+    ```
+## File Structure
+```
+Image-to-SVG-converter/
+├── image_to_svg.py            # The python code itslef
+├── requirements.txt           # Python dependencies
+├── README.md                  # Project documentation
+├── Images/                    # A folder to store images
+    └── test_image.jpg         # A basic image that can be used to test the program
+```
 
