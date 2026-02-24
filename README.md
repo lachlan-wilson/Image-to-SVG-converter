@@ -116,10 +116,19 @@ To set up the enviroment for this project do the following:
 ## File Structure
 ```
 Image-to-SVG-converter/
-├── image_to_svg.py            # The python code itslef
-├── requirements.txt           # Python dependencies
-├── README.md                  # Project documentation
-├── Images/                    # A folder to store images
-    └── test_image.jpg         # A basic image that can be used to test the program
+├── image_to_svg.py                            # The python code itslef
+├── requirements.txt                           # Python dependencies
+├── README.md                                  # Project documentation
+├── Images/                                    # Folder to store images
+│   └── test_image.jpg                         # Basic image that can be used to test the program
+└── test_image_output/                         # Output folder
+    ├── Quantised_test_image.jpg               # Quantised image
+    ├── PNG_cleaned_layers_folder/             
+    │   └── test_image_bridged_layer_1.png     # Layer 1
+    │       ...
+    └── PNG_layers_folder/
+        └── test_image_bridged_layer_1.png     # Layer 1
+            ...
 ```
-
+## Notes
+This is hopefully my first of many projects. I am more than open to feedback/tips from anyone.
