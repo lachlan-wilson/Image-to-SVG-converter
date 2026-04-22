@@ -24,7 +24,7 @@ _**A pixel with alpha > 0 will be treated as fully transparent_
 
 ## Installation
 ### Dependencies
-- Numpy
+- NumPy
 - Pillow
 - scikit-learn
 - opencv-python
