@@ -52,7 +52,11 @@ _**A pixel with alpha > 0 will be treated as fully transparent_
     ```bash
     conda install numpy pillow scikit-learn opencv
     ```
-6. Run the program:
+6. Add the path to Potrace on `line 12`:
+   ```python
+   potrace_path = "<Absolute path of potrace>"
+   ```
+8. Run the program:
     ```bash
     python main.py
     ```
