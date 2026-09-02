@@ -605,5 +605,5 @@ def main():
     print(f"Total contours: {total_contours}.\n")
     title("Complete")
 
-
-main()
+if __name__ == "__main__":
+    main()
