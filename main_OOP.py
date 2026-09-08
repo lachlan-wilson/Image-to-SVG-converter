@@ -12,29 +12,41 @@ POTRACE_PATH = "/usr/local/bin/potrace"  # Absolute path of Potrace
 
 def title(title_string: str, sub: bool = False) -> str:
     """
-    Turn a string into a title with a constant width.
+    Format a title or subtitle with dashes and ANSI colour codes.
 
     Parameters
     ----------
-    title_string: str
-        The string to be formatted.
-    sub: bool, default=False
-        Whether the string is a subtitle.
+    title_string : str
+        Text to format, excluding any decoration.
+    sub : bool, optional
+        Whether to use shorter, green subtitle styling instead of blue title
+        styling.
 
     Returns
     -------
     str
-        The formatted string.
+        Decorated text, including ANSI colour and reset codes.
 
-    Example
+    Raises
     ------
+    ValueError
+        If the text contains 50 or more characters for a title,
+        or 30 or more characters for a subtitle.
+
+    Examples
+    -------
+    >>> print(title("Start of Program"))
+    <----------------- Start of Program ----------------->
+
+    >>> print(title("Section of Program", sub=True))
+    <------ Section of Program ------>
     """
     # Raises a ValueError if the string is too long
     if len(title_string) >= (30 if sub else 50):
         raise ValueError(f"`title_string` must be less than {30 if sub else 50} characters")
 
     # Make a constant width no matter the length of the title_string
-    char_length = int((30 if sub else 50 - len(title_string)) / 2)
+    char_length = int(((30 if sub else 50) - len(title_string)) / 2)
     offset = 1 if len(title_string) % 2 == 1 else 0  # Account for half-spaces
 
     # Display the title_string in blue with correct length
@@ -45,7 +57,27 @@ def title(title_string: str, sub: bool = False) -> str:
 @dataclass()
 class ConverterSettings:
     """
-    A dataclass containing the settings for the converter.
+    Store image selection and conversion settings.
+
+    Parameters
+    ----------
+    image_path : pathlib.Path
+        Path to an image relative to the working directory.
+    image_name : str
+        Name of an image file including the extension.
+        E.g. ``"test_image.jpg"``.
+    colour_depth : int
+        Desired number of colours.
+    min_contour_area : int
+        Minimum area of a group of pixels to retain.
+    max_bridge_contour_area : int
+        Maximum area of a group of pixels eligible
+        for bridging.
+    max_contour_distance : int
+        Maximum distance between groups of pixels
+        that will be bridged.
+    bridge_width : int
+        Width of a bridge in pixels.
     """
     image_path: Path
     image_name: str
@@ -66,17 +98,74 @@ def get_inputs(defaults: ConverterSettings,
                bridge_width: int | None = None,
                ) -> ConverterSettings:
     """
-    Get all the validated input parameters from the user.
+    Collect and validate converter settings, prompting for omitted values.
+
+    Any parameters not passed will be prompted for.
+
+    Parameters
+    ----------
+    defaults : ConverterSettings
+        Default values used when prompting the user for missing values.
+    image_types : tuple[str, ...]
+        Accepted lowercase file extensions, including the dot.
+        E.g. ``(".jpeg", ".jpg", ".png")``.
+    image_name : str or None, optional
+        Name of an image file including the extension.
+        E.g. ``"test_image.jpg"``.
+    colour_depth : int or None, optional
+        Desired number of colours.
+    min_contour_area : int or None, optional
+        Minimum area of a group of pixels to retain.
+    max_bridge_contour_area : int or None, optional
+        Maximum area of a group of pixels eligible
+        for bridging.
+    max_contour_distance : int or None, optional
+        Maximum distance between groups of pixels
+        that will be bridged.
+    bridge_width : int or None, optional
+        Width of a bridge in pixels.
 
     Returns
     -------
-    None
+    ConverterSettings
+        Validated settings.
+
+    Raises
+    ------
+    ValueError
+        If a passed parameter is invalid.
+    TypeError
+        If a passed parameter is of the wrong type.
     """
 
     def validate_image_path_and_name(name: str) -> str:
+        """
+        Validate a filename based on the following criteria:
+        Must not be a path (contain '\\' or '/'),
+        end in one of the accepted image types
+        and be in the ``images`` folder.
+        E.g. ``"test_image.jpg"``.
+
+        Parameters
+        ----------
+        name : str
+            Filename to convert to a string and validate.
+
+        Returns
+        -------
+        str
+            Validated filename, including its extension.
+
+        Raises
+        ------
+        TypeError
+            If string conversion raises ``TypeError``.
+        ValueError
+            If the name is invalid.
+        """
         try:
             name = str(name)
-        except (ValueError, TypeError):
+        except TypeError:
             raise TypeError("must be a string")
 
         if "\\" in name or "/" in name:
@@ -93,6 +182,28 @@ def get_inputs(defaults: ConverterSettings,
         return name
 
     def receive_image_path_and_name(default: str, value_in: str | None = None) -> tuple[Path, str]:
+        """
+        Validate a supplied image filename or prompt until one is valid.
+
+        Parameters
+        ----------
+        default : str
+            Filename used in prompts when ``value_in`` is ``None``.
+        value_in : str or None
+            Filename to validate, ``None`` for interactive input.
+            Defaults to ``None``.
+
+        Returns
+        -------
+        tuple[pathlib.Path, str]
+            Validated image path relative to the working directory and filename
+            stem without the extension.
+
+        Raises
+        ------
+        ValueError
+            If a passed ``value_in`` fails validation.
+        """
         while True:
             if value_in is None:
                 nonlocal printed
@@ -116,10 +227,35 @@ def get_inputs(defaults: ConverterSettings,
 
         return Path("images") / value, str(Path(value).stem)
 
-    def validate_integers(value_in, min_value_excl: int = 0) -> int:
+    def validate_integers(value_in: int | str | bool, min_value_excl: int = 0) -> int:
+        """
+        Convert a value to an integer and enforce an exclusive lower bound.
+
+        Parameters
+        ----------
+        value_in : int or str or bool
+            Value to convert to an interger and validate.
+        min_value_excl : int
+            Exclusive minimum allowed value.
+            Defaults to 0.
+
+        Returns
+        -------
+        int
+            Validated integer greater than ``min_value_excl``.
+
+        Raises
+        ------
+        TypeError
+            If integer conversion raises ``TypeError``.
+        ValueError
+            If the integer is invalid.
+        OverflowError
+            If integer conversion overflows.
+        """
         try:
             value = int(value_in)
-        except (ValueError, TypeError):
+        except TypeError:
             raise TypeError("must be an integer")
 
         if min_value_excl >= value:
@@ -128,6 +264,43 @@ def get_inputs(defaults: ConverterSettings,
         return value
 
     def receive_integer(name: str, default: int, value_in: int | None = None, min_value_excl=0, max_warn=None) -> int:
+        """
+        Validate a supplied integer or prompt until one is valid.
+
+        Prompted values above ``max_warn`` require confirmation. Supplied
+        values are validated without prompting or checking that threshold.
+
+        Parameters
+        ----------
+        name : str
+            Setting name used in prompts, with underscores replaced
+            by spaces and capitalised for prompts.
+        default : int
+            Value used in prompts when ``value_in`` is ``None``.
+        value_in : int or None
+            Value to validate, ``None`` for
+            interactive input.
+            Defaults to ``None``.
+        min_value_excl : int
+            Exclusive minimum allowed value.
+            Defaults to 0.
+        max_warn : int or None
+            Inclusive threshold above which interactive input
+            requires confirmation, or ``None`` to disable the warning.
+            Defaults to ``None``.
+
+        Returns
+        -------
+        int
+            Validated integer.
+
+        Raises
+        ------
+        ValueError
+            If a passed ``value_in`` is invalid.
+        OverflowError
+            If integer conversion overflows.
+        """
         formatted_name = name.replace("_", " ").capitalize()
         while True:
             if value_in is None:
@@ -167,8 +340,9 @@ def get_inputs(defaults: ConverterSettings,
     colour_depth = receive_integer("colour_depth", defaults.colour_depth, colour_depth, max_warn=50)
     min_contour_area = receive_integer("min_contour_area", defaults.min_contour_area, min_contour_area)
     max_bridge_contour_area = receive_integer("max_bridge_contour_area", defaults.max_bridge_contour_area,
-                                              max_bridge_contour_area)
-    max_contour_distance = receive_integer("max_contour_distance", defaults.max_contour_distance, max_contour_distance)
+                                              max_bridge_contour_area, min_value_excl=-1)
+    max_contour_distance = receive_integer("max_contour_distance", defaults.max_contour_distance,
+                                           max_contour_distance, min_value_excl=-1)
     bridge_width = receive_integer("bridge_width", defaults.bridge_width, bridge_width, max_warn=25)
 
     return ConverterSettings(
@@ -183,6 +357,7 @@ def get_inputs(defaults: ConverterSettings,
 
 
 class Converter:
+
     DEFAULTS = ConverterSettings(
         image_path=Path("images") / "test_image.jpg",
         image_name="test_image.jpg",
@@ -195,24 +370,48 @@ class Converter:
 
     IMAGE_TYPES = (".jpeg", ".jpg", ".png")
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: dict[str, int | None]):
+        """
+        Initialise the converter, prompting for settings that are omitted.
+
+        Parameters
+        ----------
+        **kwargs
+            Optional arguments passed to :func:`get_inputs`:
+            See :func:`get_inputs` for details.
+
+        Raises
+        ------
+        ValueError
+            If a keyword argument is invalid.
+        TypeError
+            If a keyword argument is of the wrong type.
+        """
         # Initialise variables
         self.settings = get_inputs(self.DEFAULTS, self.IMAGE_TYPES, **kwargs)
 
     def load_image(self, img_path):
         """
-        Load the image from the given path into a numpy array.
-        The image is correctly orientated in RGBA format.
+        Load an image as an RGBA array, applying its EXIF orientation.
 
         Parameters
         ----------
-        img_path : `Path`
-            The path to the image within the `images` folder.
+        img_path : str or pathlib.Path
+            Path to the source image.
 
         Returns
         -------
-        ImageFile
-            A numpy array containing the image pixels.
+        numpy.ndarray
+            Array of 8-bit RGBA pixels with shape ``(height, width, 4)``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the image path does not exist.
+        PIL.UnidentifiedImageError
+            If Pillow cannot identify the image.
+        OSError
+            If the image cannot be opened or decoded.
         """
         print("Loading image...", end="")
         img = Image.open(img_path)  # Open the image
@@ -225,18 +424,26 @@ class Converter:
 
     def create_output_folder(self, img_name):
         """
-        Create an output folder with the same name as the image.
-        Overwrites any existing folder with that name.
+        Create an empty output folder named ``<img_name>_output``.
+
+        Any existing file or directory at the output path is deleted,
+        including all contents of an existing directory.
 
         Parameters
         ----------
-        img_name: str
-            The name of the image.
+        img_name : str
+            Image name that is used as the output folder prefix.
 
         Returns
         -------
-        `Path`
-            The path to the output folder.
+        pathlib.Path
+            Path to the newly created output folder.
+
+        Raises
+        ------
+        OSError
+            If an existing output cannot be removed or the new
+            directory cannot be created.
         """
         print("Creating output folder...", end="")
         output_path = Path(img_name + "_output")
