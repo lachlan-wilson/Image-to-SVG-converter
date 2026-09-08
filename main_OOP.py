@@ -163,19 +163,24 @@ def get_inputs(defaults: ConverterSettings,
         ValueError
             If the name is invalid.
         """
+        # Ensure the name is a string
         try:
             name = str(name)
         except TypeError:
             raise TypeError("must be a string")
 
+        # Ensure the name is not a path
         if "\\" in name or "/" in name:
             raise ValueError("cannot be a path (contain '\\' or '/')")
 
+        # Create a Path object from the name using the `images` folder within the working directory
         path = Path("images") / name
 
+        # Ensure the image file is a supported type
         if path.suffix.lower() not in image_types:
             raise ValueError(f"must end in {image_types}")
 
+        # Ensure the image file exists in the `images` folder
         if not path.is_file():
             raise ValueError("was not found in the `images` folder")
 
@@ -204,39 +209,49 @@ def get_inputs(defaults: ConverterSettings,
         ValueError
             If a passed ``value_in`` fails validation.
         """
+        # Loop until a valid image path is received
         while True:
+            # If no value is passed, prompt for one
             if value_in is None:
+                # Print the title and make sure it's only printed once
                 nonlocal printed
                 if not printed:
                     print(title("Input Parameters"))
                     printed = True
+
+                # Receive a name from the user. If it is an empty string, use the default name
                 value = input(f"Image name [{default}]: ") or default
 
+                # Validate the name, displaying an error message if it fails and allowing the user to try again
                 try:
                     value = validate_image_path_and_name(value)
                     break
                 except (ValueError, TypeError) as e:
+                    # Display the error message using the error message raised by the function
                     print(f"\033[91mError. Image name {e}. Please try again.\033[0m")
 
+            # If a name is passed, use it directly
             else:
+                # Validate the name, raising an error if it fails
                 try:
                     value = validate_image_path_and_name(value_in)
                     break
                 except (ValueError, TypeError) as e:
                     raise ValueError(f"image_name {e}")
 
+        # Return the image path and filename stem without the extension
         return Path("images") / value, str(Path(value).stem)
 
-    def validate_integers(value_in: int | str | bool, min_value_excl: int = 0) -> int:
+    def validate_integers(value_in: int | str | bool, min_value_incl: int = 1) -> int:
         """
         Convert a value to an integer and enforce an exclusive lower bound.
 
         Parameters
         ----------
         value_in : int or str or bool
-            Value to convert to an interger and validate.
-        min_value_excl : int
-            Exclusive minimum allowed value.
+            Value to convert to an integer and validate.
+        min_value_incl : int, optional
+            Inclusive minimum allowed value.
             Defaults to 0.
 
         Returns
@@ -253,17 +268,20 @@ def get_inputs(defaults: ConverterSettings,
         OverflowError
             If integer conversion overflows.
         """
+        # Ensure the value is an integer
         try:
             value = int(value_in)
         except TypeError:
             raise TypeError("must be an integer")
 
-        if min_value_excl >= value:
-            raise ValueError(f"must be > {min_value_excl}")
+        # Ensure the value is greater than the minimum allowed value
+        if value < min_value_incl:
+            raise ValueError(f"must be > {min_value_incl}")
 
         return value
 
-    def receive_integer(name: str, default: int, value_in: int | None = None, min_value_excl=0, max_warn=None) -> int:
+    def receive_integer(name: str, default: int, value_in: int | None = None, min_value_incl: int = 1,
+                        max_warn: int | None = None) -> int:
         """
         Validate a supplied integer or prompt until one is valid.
 
@@ -281,10 +299,10 @@ def get_inputs(defaults: ConverterSettings,
             Value to validate, ``None`` for
             interactive input.
             Defaults to ``None``.
-        min_value_excl : int
-            Exclusive minimum allowed value.
+        min_value_incl : int, optional
+            Inclusive minimum allowed value.
             Defaults to 0.
-        max_warn : int or None
+        max_warn : int or None, optional
             Inclusive threshold above which interactive input
             requires confirmation, or ``None`` to disable the warning.
             Defaults to ``None``.
@@ -301,18 +319,29 @@ def get_inputs(defaults: ConverterSettings,
         OverflowError
             If integer conversion overflows.
         """
+        # Creates a formatted name for the user prompts
         formatted_name = name.replace("_", " ").capitalize()
+
+        # Loop until a valid integer is received
         while True:
+            # If no value is passed, prompt for one
             if value_in is None:
+                # Print the title and make sure it's only printed once
                 nonlocal printed
                 if not printed:
                     print(title("Input Parameters"))
                     printed = True
+
+                # Receive a value from the user. If it is an empty string, use the default value
                 value = input(f"{formatted_name} [{default}]: ") or default
 
+                # Validate the value, displaying an error message if it fails and allowing the user to try again
                 try:
-                    value = validate_integers(value, min_value_excl)
+                    value = validate_integers(value, min_value_incl)
+
+                    # If there is a maximum recommended value, and it had been exceeded, then prompt for confirmation, warning the user
                     if max_warn is not None and value > max_warn:
+                        # Loop until 'Y' or 'N' is entered
                         while True:
                             answer = input(
                                 f"\033[33mWarning. {formatted_name} is not recommended to be over{max_warn}. Are you sure you want to proceed (Y/[N])? \033[0m") or "N"
@@ -320,31 +349,39 @@ def get_inputs(defaults: ConverterSettings,
                                 print(f"\033[91mError. Invalid input. Please enter 'Y' or 'N'.\033[0m")
                                 continue
                             break
+                        # If the user entered 'N', let them re-enter the value
                         if answer.upper() == "N":
                             continue
                     return value
 
+                # Display the error message using the error message raised by the function
                 except (ValueError, TypeError) as e:
                     print(f"\033[91mError. {formatted_name} {e}. Please try again.\033[0m")
+
+            # If a value is passed, use it directly
             else:
+                # Validate the name, raising an error if it fails
                 try:
-                    return validate_integers(value_in, min_value_excl)
+                    return validate_integers(value_in, min_value_incl)
                 except (ValueError, TypeError) as e:
                     if not e[1]:
                         raise ValueError(f"{name} {e[0]}")
         return 0
 
+    # Initialise the `printed` variable to False
     printed = False
 
+    # Receive all the settings using the appropriate defaults, mins and maxes
     image_path, image_name = receive_image_path_and_name(defaults.image_name, image_name)
     colour_depth = receive_integer("colour_depth", defaults.colour_depth, colour_depth, max_warn=50)
     min_contour_area = receive_integer("min_contour_area", defaults.min_contour_area, min_contour_area)
     max_bridge_contour_area = receive_integer("max_bridge_contour_area", defaults.max_bridge_contour_area,
-                                              max_bridge_contour_area, min_value_excl=-1)
+                                              max_bridge_contour_area, min_value_incl=0)
     max_contour_distance = receive_integer("max_contour_distance", defaults.max_contour_distance,
-                                           max_contour_distance, min_value_excl=-1)
+                                           max_contour_distance, min_value_incl=0)
     bridge_width = receive_integer("bridge_width", defaults.bridge_width, bridge_width, max_warn=25)
 
+    # Return the validated settings as a dataclass
     return ConverterSettings(
         image_path=image_path,
         image_name=image_name,
@@ -357,7 +394,6 @@ def get_inputs(defaults: ConverterSettings,
 
 
 class Converter:
-
     DEFAULTS = ConverterSettings(
         image_path=Path("images") / "test_image.jpg",
         image_name="test_image.jpg",
@@ -390,7 +426,7 @@ class Converter:
         # Initialise variables
         self.settings = get_inputs(self.DEFAULTS, self.IMAGE_TYPES, **kwargs)
 
-    def load_image(self, img_path):
+    def load_image(self):
         """
         Load an image as an RGBA array, applying its EXIF orientation.
 
@@ -414,7 +450,7 @@ class Converter:
             If the image cannot be opened or decoded.
         """
         print("Loading image...", end="")
-        img = Image.open(img_path)  # Open the image
+        img = Image.open(self.settings.image_path)  # Open the image
         img = ImageOps.exif_transpose(img)  # Ensure image is correctly orientated
         img = img.convert("RGBA")  # Convert the image to RGBA
         img = numpy.array(img)  # Convert the image to a numpy array of pixels
