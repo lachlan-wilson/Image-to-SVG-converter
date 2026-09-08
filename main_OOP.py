@@ -1,25 +1,22 @@
 # ---- Image2Vector ----
 #  ---- 02/08/2026 ----
-import os
-from pathlib import Path
-import tempfile
-import subprocess
-from PIL import Image, ImageOps
-import cv2
-import numpy
-from sklearn.cluster import MiniBatchKMeans
-import time
 import shutil
-potrace_path = "/usr/local/bin/potrace"     # Absolute path of Potrace
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy
+from PIL import Image, ImageOps
+
+POTRACE_PATH = "/usr/local/bin/potrace"  # Absolute path of Potrace
 
 
-def title(title, sub=False):
+def title(title_string: str, sub: bool = False) -> str:
     """
     Turn a string into a title with a constant width.
 
     Parameters
     ----------
-    title: str
+    title_string: str
         The string to be formatted.
     sub: bool, default=False
         Whether the string is a subtitle.
@@ -28,219 +25,234 @@ def title(title, sub=False):
     -------
     str
         The formatted string.
+
+    Example
+    ------
     """
-    char_length = int(
-        (30 if sub else 50 - len(title)) / 2)  # Make a constant width no matter the length of the title
-    offset = 1 if len(title) % 2 == 1 else 0  # Account for half-spaces
+    # Raises a ValueError if the string is too long
+    if len(title_string) >= (30 if sub else 50):
+        raise ValueError(f"`title_string` must be less than {30 if sub else 50} characters")
 
-    # Display the title in blue with correct length
+    # Make a constant width no matter the length of the title_string
+    char_length = int((30 if sub else 50 - len(title_string)) / 2)
+    offset = 1 if len(title_string) % 2 == 1 else 0  # Account for half-spaces
+
+    # Display the title_string in blue with correct length
     colour = "\033[32m" if sub else "\033[94m"
-    return colour + "<" + "-" * char_length + f" {title} " + "-" * (char_length + offset) + ">\033[0m"
+    return colour + "<" + "-" * char_length + f" {title_string} " + "-" * (char_length + offset) + ">\033[0m"
 
 
-class MyImage:
-    def __init__(self, defaults=("test_image.jpg", 8, 50, 100, 30, 1), image_types=(".jpeg", ".jpg", ".png")):
-        defaults = {"image_name": defaults[0],
-                    "colour_depth": defaults[1],
-                    "min_contour_area": defaults[2],
-                    "max_contour_distance": defaults[3],
-                    "bridge_width": defaults[4],}
+@dataclass()
+class ConverterSettings:
+    """
+    A dataclass containing the settings for the converter.
+    """
+    image_path: Path
+    image_name: str
+    colour_depth: int
+    min_contour_area: int
+    max_bridge_contour_area: int
+    max_contour_distance: int
+    bridge_width: int
 
-        # User input functions
-        def _get_image_path():
-            """
-            Get a valid image name from the user and make it a `Path` object for an image in the `images` folder.
-            The file must be an image of a supported type and exist within the `images` folder.
 
-            Returns
-            -------
-            str
-                A string containing the path to the image, e.g. `images/test_image.jpg`.
-            """
-            # Loop until a valid image name is entered
-            while True:
-                # Get the image name from the user
-                image_name = str(input(f"Image name [{defaults['image_name']}]: ") or defaults["image_name"])
+def get_inputs(defaults: ConverterSettings,
+               image_types: tuple[str, ...],
+               image_name: str | None = None,
+               colour_depth: int | None = None,
+               min_contour_area: int | None = None,
+               max_bridge_contour_area: int | None = None,
+               max_contour_distance: int | None = None,
+               bridge_width: int | None = None,
+               ) -> ConverterSettings:
+    """
+    Get all the validated input parameters from the user.
 
-                # Ensure the image name is not a path
-                if "/" in image_name:
-                    print(f"\033[91mError. Invalid image name, cannot be a path. Please enter a valid file name.\033[0m")
-                    continue
+    Returns
+    -------
+    None
+    """
 
-                # Convert the image name to a Path within the `images` folder
-                image_name = Path("images") / image_name
+    def validate_image_path_and_name(name: str) -> str:
+        try:
+            name = str(name)
+        except (ValueError, TypeError):
+            raise TypeError("must be a string")
 
-                # Ensure the image name is a valid file type
-                if image_name.suffix not in image_types:
-                    print(f"\033[91mError. Invalid file type. Please enter a valid file type {image_types}.\033[0m")
-                    continue
+        if "\\" in name or "/" in name:
+            raise ValueError("cannot be a path (contain '\\' or '/')")
 
-                # Ensure the image name exists within the `images` folder
-                if not image_name.is_file():
-                    print(f"\033[91mError. File not found. Please enter a valid file name.\033[0m")
-                    continue
+        path = Path("images") / name
 
-                return image_name
+        if path.suffix.lower() not in image_types:
+            raise ValueError(f"must end in {image_types}")
 
-        def _get_colour_depth():
-            """
-            Get a valid colour depth from the user.
-            The colour depth must be an integer greater than 0, and it is recommended to be less than 51.
+        if not path.is_file():
+            raise ValueError("was not found in the `images` folder")
 
-            Returns
-            -------
-            int
-                An integer representing the colour depth.
-            """
-            while True:
-                # Get the colour depth from the user ensuring it is an integer
+        return name
+
+    def receive_image_path_and_name(default: str, value_in: str | None = None) -> tuple[Path, str]:
+        while True:
+            if value_in is None:
+                nonlocal printed
+                if not printed:
+                    print(title("Input Parameters"))
+                    printed = True
+                value = input(f"Image name [{default}]: ") or default
+
                 try:
-                    colour_depth = int(input(f"Number of colours [{defaults['colour_depth']}]: ") or defaults["colour_depth"])
+                    value = validate_image_path_and_name(value)
+                    break
+                except (ValueError, TypeError) as e:
+                    print(f"\033[91mError. Image name {e}. Please try again.\033[0m")
 
-                except ValueError:
-                    print(f"\033[91mError. Invalid data type. Please enter an integer.\033[0m")
-                    continue
+            else:
+                try:
+                    value = validate_image_path_and_name(value_in)
+                    break
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f"image_name {e}")
 
-                if not colour_depth > 0:
-                    print(f"\033[91mError. Invalid integer ({colour_depth}). Please enter an integer greater than 0.\033[0m")
-                    continue
+        return Path("images") / value, str(Path(value).stem)
 
-                # Warn the user if the colour depth is > 50
-                if colour_depth > 50:
-                    while True:
-                        answer = input(f"\033[33mWarning. Large integer. Colour depths greater than 50 are not recommended, are you sure you want to proceed (Y/[N])? \033[0m") or "N"
-                        if answer.upper() not in ("Y", "N"):
-                            print(f"\033[91mError. Invalid input. Please enter 'Y' or 'N'.\033[0m")
+    def validate_integers(value_in, min_value_excl: int = 0) -> int:
+        try:
+            value = int(value_in)
+        except (ValueError, TypeError):
+            raise TypeError("must be an integer")
+
+        if min_value_excl >= value:
+            raise ValueError(f"must be > {min_value_excl}")
+
+        return value
+
+    def receive_integer(name: str, default: int, value_in: int | None = None, min_value_excl=0, max_warn=None) -> int:
+        formatted_name = name.replace("_", " ").capitalize()
+        while True:
+            if value_in is None:
+                nonlocal printed
+                if not printed:
+                    print(title("Input Parameters"))
+                    printed = True
+                value = input(f"{formatted_name} [{default}]: ") or default
+
+                try:
+                    value = validate_integers(value, min_value_excl)
+                    if max_warn is not None and value > max_warn:
+                        while True:
+                            answer = input(
+                                f"\033[33mWarning. {formatted_name} is not recommended to be over{max_warn}. Are you sure you want to proceed (Y/[N])? \033[0m") or "N"
+                            if answer.upper() not in ("Y", "N"):
+                                print(f"\033[91mError. Invalid input. Please enter 'Y' or 'N'.\033[0m")
+                                continue
+                            break
+                        if answer.upper() == "N":
                             continue
-                        break
-                    if answer.upper() == "N":
-                        continue
+                    return value
 
-                return colour_depth
-
-        def _get_min_contour_area():
-            """
-            Get a valid minimum contour area from the user.
-            The minimum contour area must be an integer greater than 0.
-
-            Returns
-            -------
-            int
-                An integer representing the minimum contour area.
-            """
-            while True:
+                except (ValueError, TypeError) as e:
+                    print(f"\033[91mError. {formatted_name} {e}. Please try again.\033[0m")
+            else:
                 try:
-                    min_contour_area = int(input(f"Minimum contour area (px\u00b2) [{defaults['min_contour_area']}]: ") or defaults['min_contour_area'])
+                    return validate_integers(value_in, min_value_excl)
+                except (ValueError, TypeError) as e:
+                    if not e[1]:
+                        raise ValueError(f"{name} {e[0]}")
+        return 0
 
-                except ValueError:
-                    print(f"\033[91mError. Invalid data type. Please enter an integer.\033[0m")
-                    continue
+    printed = False
 
-                if not min_contour_area > 0:
-                    print(f"\033[91mError. Invalid integer ({min_contour_area}). Please enter an integer greater than 0.\033[0m")
-                    continue
+    image_path, image_name = receive_image_path_and_name(defaults.image_name, image_name)
+    colour_depth = receive_integer("colour_depth", defaults.colour_depth, colour_depth, max_warn=50)
+    min_contour_area = receive_integer("min_contour_area", defaults.min_contour_area, min_contour_area)
+    max_bridge_contour_area = receive_integer("max_bridge_contour_area", defaults.max_bridge_contour_area,
+                                              max_bridge_contour_area)
+    max_contour_distance = receive_integer("max_contour_distance", defaults.max_contour_distance, max_contour_distance)
+    bridge_width = receive_integer("bridge_width", defaults.bridge_width, bridge_width, max_warn=25)
 
-                return min_contour_area
-
-        def _get_max_contour_distance():
-            """
-            Get a valid maximum contour distance from the user.
-            The maximum contour distance must be an integer greater than 0.
-
-            Returns
-            -------
-            int
-                An integer representing the maximum contour distance.
-            """
-            while True:
-                # TODO: Change from center to centre
-                try:
-                    max_contour_distance = int(input(f"Maximum contour distance (center to center) (px) [{defaults['max_contour_distance']}]: ") or defaults["max_contour_distance"])
-
-                except ValueError:
-                    print(f"\033[91mError. Invalid data type. Please enter an integer.\033[0m")
-                    continue
-
-                if not max_contour_distance > 0:
-                    print(f"\033[91mError. Invalid integer ({max_contour_distance}). Please enter an integer greater than 0.\033[0m")
-                    continue
-
-                return max_contour_distance
-
-        def _get_bridge_width():
-            """
-            Get a valid bridge width from the user.
-            The bridge width must be an integer greater than 0, and it is recommended to be less than 51.
-
-            Returns
-            -------
-            int
-                An integer representing the bridge width.
-            """
-            while True:
-                try:
-                    bridge_width = int(input(f"Bridge Width (px) [{defaults['bridge_width']}]: ") or defaults["bridge_width"])
-
-                except ValueError:
-                    print(f"\033[91mError. Invalid data type. Please enter an integer.\033[0m")
-                    continue
-
-                if not bridge_width > 0:
-                    print(f"\033[91mError. Invalid integer ({bridge_width}). Please enter an integer greater than 0.\033[0m")
-                    continue
-
-                if bridge_width > 50:
-                    while True:
-                        answer = input(
-                            f"\033[33mWarning. Large integer. Bridge widths greater than 50 are not recommended, are you sure you want to proceed (Y/[N])? \033[0m") or "N"
-                        if answer.upper() not in ("Y", "N"):
-                            print(f"\033[91mError. Invalid input. Please enter 'Y' or 'N'.\033[0m")
-                            continue
-                        break
-                    if answer.upper() == "N":
-                        continue
-
-                return bridge_width
-
-        # Other functions
-        def _get_inputs():
-            """
-            Get all the validated input parameters from the user.
-
-            Returns
-            -------
-            tuple[str, int, int, int, int]
-                A tuple containing the validated input parameters.
-            """
-            print(title("Input Parameters"))
-
-            return _get_image_path(), _get_colour_depth(), _get_min_contour_area(), _get_max_contour_distance(), _get_bridge_width()
-
-        def _load_image(img_path):
-            """
-            Load the image from the given path into a numpy array.
-            The image is correctly orientated in RGBA format.
-
-            Parameters
-            ----------
-            img_path : `Path`
-                The path to the image within the `images` folder.
-
-            Returns
-            -------
-            ImageFile
-                A numpy array containing the image pixels.
-            """
-            print(title("Loading Image"))
-
-            print("Loading image...", end="")
-            img = Image.open(img_path)  # Open the image
-            img = ImageOps.exif_transpose(img)  # Ensure image is correctly orientated
-            img = img.convert("RGBA")   # Convert the image to RGBA
-            img = numpy.array(img)  # Convert the image to a numpy array of pixels
-            print("\rLoaded Image.\n")
-
-            return img
+    return ConverterSettings(
+        image_path=image_path,
+        image_name=image_name,
+        colour_depth=colour_depth,
+        min_contour_area=min_contour_area,
+        max_bridge_contour_area=max_bridge_contour_area,
+        max_contour_distance=max_contour_distance,
+        bridge_width=bridge_width,
+    )
 
 
-image = MyImage()
+class Converter:
+    DEFAULTS = ConverterSettings(
+        image_path=Path("images") / "test_image.jpg",
+        image_name="test_image.jpg",
+        colour_depth=8,
+        min_contour_area=30,
+        max_bridge_contour_area=50,
+        max_contour_distance=100,
+        bridge_width=1,
+    )
+
+    IMAGE_TYPES = (".jpeg", ".jpg", ".png")
+
+    def __init__(self, **kwargs):
+        # Initialise variables
+        self.settings = get_inputs(self.DEFAULTS, self.IMAGE_TYPES, **kwargs)
+
+    def load_image(self, img_path):
+        """
+        Load the image from the given path into a numpy array.
+        The image is correctly orientated in RGBA format.
+
+        Parameters
+        ----------
+        img_path : `Path`
+            The path to the image within the `images` folder.
+
+        Returns
+        -------
+        ImageFile
+            A numpy array containing the image pixels.
+        """
+        print("Loading image...", end="")
+        img = Image.open(img_path)  # Open the image
+        img = ImageOps.exif_transpose(img)  # Ensure image is correctly orientated
+        img = img.convert("RGBA")  # Convert the image to RGBA
+        img = numpy.array(img)  # Convert the image to a numpy array of pixels
+        print("\rLoaded Image.\n")
+
+        return img
+
+    def create_output_folder(self, img_name):
+        """
+        Create an output folder with the same name as the image.
+        Overwrites any existing folder with that name.
+
+        Parameters
+        ----------
+        img_name: str
+            The name of the image.
+
+        Returns
+        -------
+        `Path`
+            The path to the output folder.
+        """
+        print("Creating output folder...", end="")
+        output_path = Path(img_name + "_output")
+
+        if output_path.exists():
+            if output_path.is_dir():
+                shutil.rmtree(output_path)
+            else:
+                output_path.unlink()
+
+        output_path.mkdir(parents=True, exist_ok=False)
+        print("\rCreated output folder.\n")
+
+        return output_path
+
+
+converter = Converter()
+
+print(converter.settings)
