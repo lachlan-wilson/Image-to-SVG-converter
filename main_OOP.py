@@ -4,8 +4,11 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy
+import cv2
+import numpy as np
+import numpy.typing as npt
 from PIL import Image, ImageOps
+from sklearn.cluster import MiniBatchKMeans
 
 POTRACE_PATH = "/usr/local/bin/potrace"  # Absolute path of Potrace
 
@@ -33,13 +36,13 @@ def title(title_string: str, sub: bool = False) -> str:
         If the text contains 50 or more characters for a title,
         or 30 or more characters for a subtitle.
 
-    Examples
-    -------
-    >>> print(title("Start of Program"))
-    <----------------- Start of Program ----------------->
-
-    >>> print(title("Section of Program", sub=True))
-    <------ Section of Program ------>
+    # Examples TODO: Unhash
+    # -------
+    # >>> print(title("Start of Program"))
+    # <----------------- Start of Program ----------------->
+    #
+    # >>> print(title("Section of Program", sub=True))
+    # <------ Section of Program ------>
     """
     # Raises a ValueError if the string is too long
     if len(title_string) >= (30 if sub else 50):
@@ -424,10 +427,13 @@ class Converter:
             If a keyword argument is of the wrong type.
         """
         # Initialise settings using the passed arguments or prompting the user if one isn't passed
-        self.settings = get_inputs(self.DEFAULTS, self.IMAGE_TYPES, **kwargs)
+        self.settings: ConverterSettings = get_inputs(self.DEFAULTS, self.IMAGE_TYPES, **kwargs)
 
-        self.image = numpy.empty((0, 0, 4), dtype=numpy.uint8)
-        self.output_path = Path("")
+        # Initialise the images as none and specify their type as being a ndarray of type uint8
+        self.original_image: npt.NDArray[np.uint8] | None = None
+        self.quantised_image: npt.NDArray[np.uint8] | None = None
+
+        self.output_path: Path = Path("")
 
     def load_image(self):
         """
@@ -446,12 +452,12 @@ class Converter:
         print("Loading image...", end="")
         img = Image.open(self.settings.image_path)  # Open the image
         img = ImageOps.exif_transpose(img)  # Ensure image is correctly orientated
-        img = img.convert("RGBA")   # Convert the image to RGBA
-        img = numpy.array(img)  # Convert the image to a numpy array of pixels
-        print("\rLoaded Image.\n")
+        img = img.convert("RGBA")  # Convert the image to RGBA
+        img_array = np.array(img)  # Convert the image to a numpy array of pixels
+        print("\rLoaded Image.")
 
         # Save the image as a class attribute
-        self.image = img
+        self.original_image = img_array
 
     def create_output_folder(self):
         """
@@ -466,6 +472,7 @@ class Converter:
             If an existing output cannot be removed or the new
             directory cannot be created.
         """
+        deleted = False
         print("Creating output folder...", end="")
         # Create a folder path based on the image name
         output_path = Path(self.settings.image_name + "_output")
@@ -476,21 +483,88 @@ class Converter:
                 shutil.rmtree(output_path)
             else:
                 output_path.unlink()
+            deleted = True
 
         # Create the new folder
         output_path.mkdir(parents=True, exist_ok=False)
-        print("\rCreated output folder.\n")
+        print(f"\rCreated output folder{" and deleted the existing folder." if deleted else "."}")
 
         # Save the output path as a class attribute
         self.output_path = output_path
 
     def quantise_image(self):
         print("Selecting transparent pixels...", end="")
-        alpha_channel = self.image[..., 3]  # Select the alpha channel
-        trans_pixels = (alpha_channel < 255).reshape(-1)
+        if self.original_image is None:
+            raise ValueError("image not loaded, please load an image before trying to quantise it")
+
+        alpha_channel = self.original_image[..., 3]  # Select the alpha channel
+        # Create a boolean array of the transparent pixels
+        trans_pixels = np.ravel(alpha_channel < 255)
+        print(f"\rSelected {len(trans_pixels)} transparent pixels.")
+
+        print("Converting the image to HLS colour space...", end="")
+        # Convert the image to HLS colour space
+        image_hls = cv2.cvtColor(self.original_image[..., :3], cv2.COLOR_RGB2HLS)
+        print("\rConverted the image to HLS colour space.")
+
+        print("Reshaping the image...", end="")
+        # Get the height and width of the image in pixels
+        height, width = image_hls.shape[:2]
+        n_pixels = height * width
+        # Flatten the array so each pixel has an index with 3 colours,
+        image_flat_hls = image_hls.reshape((-1, 3)).astype(np.uint8)
+        print(f"\rReshaped the image to {n_pixels} pixels.")
+
+        print("Removing transparent pixels...", end="")
+        n_trans_pixels = len(trans_pixels)
+        trans_exist = n_trans_pixels > 0
+        image_flat_hls_no_bg = image_flat_hls[~trans_pixels]
+        print(f"\rRemoved {n_trans_pixels} transparent pixels.")
+
+        print(f"Selecting {self.settings.colour_depth} colours...", end="")
+        # TODO: Change kmeans to be better
+        kmeans = MiniBatchKMeans(n_clusters=(self.settings.colour_depth - int(trans_exist)), random_state=42, batch_size=2048)
+        image_pixel_labels = kmeans.fit_predict(image_flat_hls_no_bg)
+        colour_groups = kmeans.cluster_centers_
+        print(f"\rSelected {self.settings.colour_depth} colours.")
+
+        if trans_exist:
+            print("Adding a background...", end="")
+            pixel_labels = np.full(n_pixels, fill_value=(self.settings.colour_depth - 1), dtype=np.int8)
+            pixel_labels[~trans_pixels] = pixel_labels
+            black = np.array([0, 0, 0], dtype=np.uint8)
+            colour_groups = np.vstack((colour_groups, black))
+            print("\rAdded a background.")
+
+        print("Sorting colours by lightness...", end="")
+        colour_groups_order = (np.argsort(colour_groups[:, 1]))
+        ordered_colour_groups = colour_groups[colour_groups_order]
+
+        blank_image = np.zeros_like(colour_groups_order)
+        blank_image[colour_groups_order] = np.arange(len(colour_groups_order))
+        ordered_pixel_labels = blank_image[image_pixel_labels]
+        print("\rSorted colours by lightness.")
+
+        print("Rebuilding the image...", end="")
+        quantised_image = ordered_colour_groups[ordered_pixel_labels].astype(np.uint8)
+        quantised_image = quantised_image.reshape((height, width, 3))
+        print("\rRebuilt the image.")
+
+        print("Converting the image to BGR colour space...", end="")
+        quantised_image_bgr = cv2.cvtColor(quantised_image, cv2.COLOR_HLS2BGR)
+        print("\rConverted the image back to BGR colour space.")
+
+        print("Saving the quantised image...", end="")
+        cv2.imwrite(self.output_path / f"quantised_{self.settings.image_name}.jpg", quantised_image_bgr)
+        self.quantised_image = quantised_image_bgr
+        print("\rSaved the quantised image.")
 
 
 converter = Converter()
 
-print(converter.settings)
+print(title("Load Image & Create Output Folder"))
 converter.load_image()
+converter.create_output_folder()
+
+print(title("Quantise Image"))
+converter.quantise_image()
