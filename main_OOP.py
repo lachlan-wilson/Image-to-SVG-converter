@@ -423,22 +423,16 @@ class Converter:
         TypeError
             If a keyword argument is of the wrong type.
         """
-        # Initialise variables
+        # Initialise settings using the passed arguments or prompting the user if one isn't passed
         self.settings = get_inputs(self.DEFAULTS, self.IMAGE_TYPES, **kwargs)
+
+        self.image = numpy.empty((0, 0, 4), dtype=numpy.uint8)
+        self.output_path = Path("")
 
     def load_image(self):
         """
         Load an image as an RGBA array, applying its EXIF orientation.
-
-        Parameters
-        ----------
-        img_path : str or pathlib.Path
-            Path to the source image.
-
-        Returns
-        -------
-        numpy.ndarray
-            Array of 8-bit RGBA pixels with shape ``(height, width, 4)``.
+        Saves the image as a class attribute of type ``numpy.ndarray`` of shape ``(height, width, 4)``.
 
         Raises
         ------
@@ -452,28 +446,19 @@ class Converter:
         print("Loading image...", end="")
         img = Image.open(self.settings.image_path)  # Open the image
         img = ImageOps.exif_transpose(img)  # Ensure image is correctly orientated
-        img = img.convert("RGBA")  # Convert the image to RGBA
+        img = img.convert("RGBA")   # Convert the image to RGBA
         img = numpy.array(img)  # Convert the image to a numpy array of pixels
         print("\rLoaded Image.\n")
 
-        return img
+        # Save the image as a class attribute
+        self.image = img
 
-    def create_output_folder(self, img_name):
+    def create_output_folder(self):
         """
-        Create an empty output folder named ``<img_name>_output``.
-
+        Create an empty output folder based on the image name.
         Any existing file or directory at the output path is deleted,
         including all contents of an existing directory.
-
-        Parameters
-        ----------
-        img_name : str
-            Image name that is used as the output folder prefix.
-
-        Returns
-        -------
-        pathlib.Path
-            Path to the newly created output folder.
+        Saves the output path as a class attribute of type ``pathlib.Path``.
 
         Raises
         ------
@@ -482,20 +467,30 @@ class Converter:
             directory cannot be created.
         """
         print("Creating output folder...", end="")
-        output_path = Path(img_name + "_output")
+        # Create a folder path based on the image name
+        output_path = Path(self.settings.image_name + "_output")
 
+        # If the folder already exists, delete it
         if output_path.exists():
             if output_path.is_dir():
                 shutil.rmtree(output_path)
             else:
                 output_path.unlink()
 
+        # Create the new folder
         output_path.mkdir(parents=True, exist_ok=False)
         print("\rCreated output folder.\n")
 
-        return output_path
+        # Save the output path as a class attribute
+        self.output_path = output_path
+
+    def quantise_image(self):
+        print("Selecting transparent pixels...", end="")
+        alpha_channel = self.image[..., 3]  # Select the alpha channel
+        trans_pixels = (alpha_channel < 255).reshape(-1)
 
 
 converter = Converter()
 
 print(converter.settings)
+converter.load_image()

@@ -68,7 +68,7 @@ def get_inputs():
         image_path = input(f"Image path [{defaults[0]}]: ") or defaults[0]
 
     # Get the colour depth
-    while True: # Loop until broken
+    while True:  # Loop until broken
         try:    # Try this first
             colour_depth = int(input(f"Number of colours [{defaults[1]}]: ") or defaults[1])    # Get the input
             break   # If this suceeds break from the loop
