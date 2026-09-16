@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
+import time
 import numpy as np
 import numpy.typing as npt
 from PIL import Image, ImageOps
-from sklearn.cluster import MiniBatchKMeans
 
 POTRACE_PATH = "/usr/local/bin/potrace"  # Absolute path of Potrace
 
@@ -71,6 +71,8 @@ class ConverterSettings:
         E.g. ``"test_image.jpg"``.
     colour_depth : int
         Desired number of colours.
+    best_colour_quality : bool
+        Whether to use the entire image for colour quantisation or just a sample.
     min_contour_area : int
         Minimum area of a group of pixels to retain.
     max_bridge_contour_area : int
@@ -85,6 +87,7 @@ class ConverterSettings:
     image_path: Path
     image_name: str
     colour_depth: int
+    best_colour_quality: bool
     min_contour_area: int
     max_bridge_contour_area: int
     max_contour_distance: int
@@ -95,6 +98,7 @@ def get_inputs(defaults: ConverterSettings,
                image_types: tuple[str, ...],
                image_name: str | None = None,
                colour_depth: int | None = None,
+               best_colour_quality: str | bool | None = None,
                min_contour_area: int | None = None,
                max_bridge_contour_area: int | None = None,
                max_contour_distance: int | None = None,
@@ -117,6 +121,8 @@ def get_inputs(defaults: ConverterSettings,
         E.g. ``"test_image.jpg"``.
     colour_depth : int or None, optional
         Desired number of colours.
+    best_colour_quality : str or bool or None, optional
+        Whether to use the entire image for colour quantisation or just a sample.
     min_contour_area : int or None, optional
         Minimum area of a group of pixels to retain.
     max_bridge_contour_area : int or None, optional
@@ -245,7 +251,7 @@ def get_inputs(defaults: ConverterSettings,
         # Return the image path and filename stem without the extension
         return Path("images") / value, str(Path(value).stem)
 
-    def validate_integers(value_in: int | str | bool, min_value_incl: int = 1) -> int:
+    def validate_integer(value_in: int | str | bool, min_value_incl: int = 1) -> int:
         """
         Convert a value to an integer and enforce an exclusive lower bound.
 
@@ -298,17 +304,13 @@ def get_inputs(defaults: ConverterSettings,
             by spaces and capitalised for prompts.
         default : int
             Value used in prompts when ``value_in`` is ``None``.
-        value_in : int or None
-            Value to validate, ``None`` for
-            interactive input.
-            Defaults to ``None``.
+        value_in : int or None, optional
+            Value to validate, ``None`` for interactive input.
         min_value_incl : int, optional
             Inclusive minimum allowed value.
-            Defaults to 0.
         max_warn : int or None, optional
             Inclusive threshold above which interactive input
             requires confirmation, or ``None`` to disable the warning.
-            Defaults to ``None``.
 
         Returns
         -------
@@ -340,7 +342,7 @@ def get_inputs(defaults: ConverterSettings,
 
                 # Validate the value, displaying an error message if it fails and allowing the user to try again
                 try:
-                    value = validate_integers(value, min_value_incl)
+                    value = validate_integer(value, min_value_incl)
 
                     # If there is a maximum recommended value, and it had been exceeded, then prompt for confirmation, warning the user
                     if max_warn is not None and value > max_warn:
@@ -348,13 +350,15 @@ def get_inputs(defaults: ConverterSettings,
                         while True:
                             answer = input(
                                 f"\033[33mWarning. {formatted_name} is not recommended to be over{max_warn}. Are you sure you want to proceed (Y/[N])? \033[0m") or "N"
-                            if answer.upper() not in ("Y", "N"):
-                                print(f"\033[91mError. Invalid input. Please enter 'Y' or 'N'.\033[0m")
+                            # Ensure the user entered 'Y' or 'N'
+                            try:
+                                # If the user entered 'N', let them re-enter the value
+                                if not validate_boolean(answer):
+                                    continue
+                            except ValueError as e:
+                                print(f"\033[91mError. Invalid input, {e}. Please try again.\033[0m")
                                 continue
                             break
-                        # If the user entered 'N', let them re-enter the value
-                        if answer.upper() == "N":
-                            continue
                     return value
 
                 # Display the error message using the error message raised by the function
@@ -365,18 +369,94 @@ def get_inputs(defaults: ConverterSettings,
             else:
                 # Validate the name, raising an error if it fails
                 try:
-                    return validate_integers(value_in, min_value_incl)
+                    return validate_integer(value_in, min_value_incl)
                 except (ValueError, TypeError) as e:
-                    if not e[1]:
-                        raise ValueError(f"{name} {e[0]}")
-        return 0
+                    raise ValueError(f"{name} {e}")
+
+    def validate_boolean(value_in: str | bool) -> bool:
+        """
+        Ensure a passed value is either ``'Y'``, ``'N'`` or ``bool``.
+
+        Parameter
+        ---------
+        value_in : str | bool
+            Value to be validated.
+        Returns
+        -------
+        bool
+            Validated boolean.
+
+        Raises
+        ------
+        ValueError
+            If the value is not ``'Y'`` or ``'N'``.
+        TypeError
+            If the passed value is not a string or bool.
+        """
+        if type(value_in) is bool:
+            return bool(value_in)
+        # Ensure the value is 'Y' or 'N'
+        if str(value_in).upper() not in ("Y", "N"):
+            raise ValueError(f"must be 'Y' or 'N' not {value_in}")
+
+        return False if str(value_in).upper() == "N" else True
+
+    def receive_boolean(name: str, default: str | bool, value_in: str | bool | None = None) -> bool:
+        """
+        Validate a supplied boolean or prompt until one is valid.
+
+        Parameters
+        ----------
+        name: str
+            Setting name used in prompts.
+        default: str | bool
+            Value used in prompts when ``value_in`` is ``None``.
+        value_in: str | bool | None, optional
+            Value to validate, ``None`` for interactive input.
+            Defaults to ``None``.
+
+        Returns
+        -------
+        bool
+            Validated boolean.
+
+        Raises
+        ------
+        ValueError
+            If a passed ``value_in`` is invalid.
+
+        """
+        # Creates a formatted name and default for the user prompts
+        formatted_name = name.replace("_", " ").capitalize()
+        formatted_default = f"(Y/[N])" if default == ("N" if type(default) is str else False) else f"(Y/[N])"
+
+        while True:
+            if value_in is None:
+                nonlocal printed
+                if not printed:
+                    print(title("Input Parameters"))
+                    printed = True
+
+                value = input(f"{formatted_name} {formatted_default}? ") or validate_boolean(default)
+
+                try:
+                    return validate_boolean(value)
+                except ValueError as e:
+                    print(f"\033[91mError. Invalid input, {e}. Please try again.\033[0m")
+
+            else:
+                try:
+                    return validate_boolean(value_in)
+                except ValueError as e:
+                    raise ValueError(f"{name} {e}")
 
     # Initialise the `printed` variable to False
     printed = False
 
     # Receive all the settings using the appropriate defaults, mins and maxes
     image_path, image_name = receive_image_path_and_name(defaults.image_name, image_name)
-    colour_depth = receive_integer("colour_depth", defaults.colour_depth, colour_depth, max_warn=50)
+    colour_depth = receive_integer("colour_depth", defaults.colour_depth, colour_depth, min_value_incl=2, max_warn=50)
+    best_colour_quality = receive_boolean("best_colour_quality", defaults.best_colour_quality, best_colour_quality)
     min_contour_area = receive_integer("min_contour_area", defaults.min_contour_area, min_contour_area)
     max_bridge_contour_area = receive_integer("max_bridge_contour_area", defaults.max_bridge_contour_area,
                                               max_bridge_contour_area, min_value_incl=0)
@@ -389,6 +469,7 @@ def get_inputs(defaults: ConverterSettings,
         image_path=image_path,
         image_name=image_name,
         colour_depth=colour_depth,
+        best_colour_quality=best_colour_quality,
         min_contour_area=min_contour_area,
         max_bridge_contour_area=max_bridge_contour_area,
         max_contour_distance=max_contour_distance,
@@ -401,6 +482,7 @@ class Converter:
         image_path=Path("images") / "test_image.jpg",
         image_name="test_image.jpg",
         colour_depth=8,
+        best_colour_quality=False,
         min_contour_area=30,
         max_bridge_contour_area=50,
         max_contour_distance=100,
@@ -432,8 +514,11 @@ class Converter:
         # Initialise the images as none and specify their type as being a ndarray of type uint8
         self.original_image: npt.NDArray[np.uint8] | None = None
         self.quantised_image: npt.NDArray[np.uint8] | None = None
+        self.pixel_labels: npt.NDArray[np.int32] | None = None
 
         self.output_path: Path = Path("")
+
+        self.binary_layers: list[npt.NDArray[np.uint8] | None] = []
 
     def load_image(self):
         """
@@ -453,7 +538,7 @@ class Converter:
         img = Image.open(self.settings.image_path)  # Open the image
         img = ImageOps.exif_transpose(img)  # Ensure image is correctly orientated
         img = img.convert("RGBA")  # Convert the image to RGBA
-        img_array = np.array(img)  # Convert the image to a numpy array of pixels
+        img_array = np.array(img, dtype=np.uint8)  # Convert the image to a numpy array of pixels
         print("\rLoaded Image.")
 
         # Save the image as a class attribute
@@ -475,7 +560,7 @@ class Converter:
         deleted = False
         print("Creating output folder...", end="")
         # Create a folder path based on the image name
-        output_path = Path(self.settings.image_name + "_output")
+        output_path = Path(f"{self.settings.image_name}_output")
 
         # If the folder already exists, delete it
         if output_path.exists():
@@ -493,78 +578,116 @@ class Converter:
         self.output_path = output_path
 
     def quantise_image(self):
-        print("Selecting transparent pixels...", end="")
         if self.original_image is None:
             raise ValueError("image not loaded, please load an image before trying to quantise it")
 
-        alpha_channel = self.original_image[..., 3]  # Select the alpha channel
+        print("Selecting transparent pixels...", end="")
+        alpha_channel = self.original_image[..., 3].copy()  # Select the alpha channel
         # Create a boolean array of the transparent pixels
-        trans_pixels = np.ravel(alpha_channel < 255)
-        print(f"\rSelected {len(trans_pixels)} transparent pixels.")
+        trans_pixels = alpha_channel < 255
+        # Count the number of transparent pixels
+        n_trans_pixels = int(np.sum(trans_pixels))
+        print(f"\rSelected {n_trans_pixels} transparent pixels.")
 
-        print("Converting the image to HLS colour space...", end="")
+        print("Replacing transparent pixels with black...", end="")
+        # Select the RGB channels of the image
+        image_rgb = self.original_image[..., :3].copy()
+        # Replace the transparent pixels with black
+        image_rgb[trans_pixels] = [0, 0, 0]
+        print(f"\rReplaced {n_trans_pixels} transparent pixels with black.")
+
+        print("Converting image to HLS colour space...", end="")
         # Convert the image to HLS colour space
-        image_hls = cv2.cvtColor(self.original_image[..., :3], cv2.COLOR_RGB2HLS)
-        print("\rConverted the image to HLS colour space.")
+        image_hls = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HLS)
+        print("\rConverted image to HLS colour space.")
 
-        print("Reshaping the image...", end="")
+        print("Reshaping image...", end="")
         # Get the height and width of the image in pixels
         height, width = image_hls.shape[:2]
-        n_pixels = height * width
-        # Flatten the array so each pixel has an index with 3 colours,
-        image_flat_hls = image_hls.reshape((-1, 3)).astype(np.uint8)
-        print(f"\rReshaped the image to {n_pixels} pixels.")
-
-        print("Removing transparent pixels...", end="")
-        n_trans_pixels = len(trans_pixels)
-        trans_exist = n_trans_pixels > 0
-        image_flat_hls_no_bg = image_flat_hls[~trans_pixels]
-        print(f"\rRemoved {n_trans_pixels} transparent pixels.")
+        # Flatten the array so each pixel has an index with 3 colours
+        image_flat_hls = image_hls.reshape((-1, 3)).astype(np.float32)
+        print(f"\rReshaped image.")
 
         print(f"Selecting {self.settings.colour_depth} colours...", end="")
-        # TODO: Change kmeans to be better
-        kmeans = MiniBatchKMeans(n_clusters=(self.settings.colour_depth - int(trans_exist)), random_state=42, batch_size=2048)
-        image_pixel_labels = kmeans.fit_predict(image_flat_hls_no_bg)
-        colour_groups = kmeans.cluster_centers_
+        # Define the criteria for stopping the K-Means clustering algorithm
+        stop_criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 50, 0.2)
+
+        # Use a sample of the image if best colour quality is not selected, otherwise use all pixels
+        if self.settings.best_colour_quality:
+            sample = image_flat_hls
+        else:
+            sample_size = min(10000, len(image_flat_hls))
+            indices = np.random.choice(len(image_flat_hls), sample_size, replace=False)
+            sample = image_flat_hls[indices]
+
+        # Use K-Means clustering to select the desired number of colours
+        _, labels, centers = cv2.kmeans(sample, self.settings.colour_depth, np.empty((0, 1)), stop_criteria, 1, cv2.KMEANS_PP_CENTERS)
+
+        # Store the cluster centres (chosen colours)
+        colour_groups = centers.astype(np.float32)
+
+        # Assigns each pixel to a colour group based on the closest colour in the cluster
+        if self.settings.best_colour_quality:
+            pixel_labels = labels.ravel().astype(np.int32)
+        else:
+            distances = np.sum((image_flat_hls[:, np.newaxis, :] - colour_groups[np.newaxis, :, :]) ** 2, axis=2)
+            pixel_labels = np.argmin(distances, axis=1).astype(np.int32)
+
         print(f"\rSelected {self.settings.colour_depth} colours.")
 
-        if trans_exist:
-            print("Adding a background...", end="")
-            pixel_labels = np.full(n_pixels, fill_value=(self.settings.colour_depth - 1), dtype=np.int8)
-            pixel_labels[~trans_pixels] = pixel_labels
-            black = np.array([0, 0, 0], dtype=np.uint8)
-            colour_groups = np.vstack((colour_groups, black))
-            print("\rAdded a background.")
-
         print("Sorting colours by lightness...", end="")
+        # Sort the colours by their lightness so that the lighter colours are first
         colour_groups_order = (np.argsort(colour_groups[:, 1]))
         ordered_colour_groups = colour_groups[colour_groups_order]
 
-        blank_image = np.zeros_like(colour_groups_order)
+        # Reassign the pixel labels to the new order
+        blank_image = np.empty_like(colour_groups_order)
         blank_image[colour_groups_order] = np.arange(len(colour_groups_order))
-        ordered_pixel_labels = blank_image[image_pixel_labels]
+        ordered_pixel_labels = blank_image[pixel_labels].astype(np.int32)
         print("\rSorted colours by lightness.")
 
-        print("Rebuilding the image...", end="")
+        print("Rebuilding image...", end="")
+        # Rebuild the image from the pixel labels and colour groups
         quantised_image = ordered_colour_groups[ordered_pixel_labels].astype(np.uint8)
         quantised_image = quantised_image.reshape((height, width, 3))
-        print("\rRebuilt the image.")
+        print("\rRebuilt image.")
 
-        print("Converting the image to BGR colour space...", end="")
-        quantised_image_bgr = cv2.cvtColor(quantised_image, cv2.COLOR_HLS2BGR)
-        print("\rConverted the image back to BGR colour space.")
+        print("Converting image to BGR colour space...", end="")
+        # noinspection bad-assignment
+        quantised_image_bgr: npt.NDArray[np.uint8] = cv2.cvtColor(quantised_image, cv2.COLOR_HLS2BGR)
+        print("\rConverted image to BGR colour space.")
 
-        print("Saving the quantised image...", end="")
-        cv2.imwrite(self.output_path / f"quantised_{self.settings.image_name}.jpg", quantised_image_bgr)
+        print("Saving quantised image...", end="")
+        # Save the quantised image and pixel labels
+        cv2.imwrite(str(self.output_path / f"quantised_{self.settings.image_name}.jpg"), quantised_image_bgr)
         self.quantised_image = quantised_image_bgr
-        print("\rSaved the quantised image.")
+        self.pixel_labels = ordered_pixel_labels.reshape(height, width)
+        print("\rSaved quantised image.")
+
+    def build_binary_layers(self):
+        print("Creating output folder for binary layers...", end="")
+        output_path = self.output_path / "_binary_layers"
+        output_path.mkdir(parents=True, exist_ok=False)
+        print("\rCreated output folder for binary layers.")
+
+        layer = np.zeros_like(self.quantised_image)
+
+        for i in range(self.settings.colour_depth):
+            print(f"Converting each colour to a binary layer... [{i + 1}/{self.settings.colour_depth}]", end=" ")
+
+            if i > 0:
+                layer[self.pixel_labels == i - 1] = 255
 
 
 converter = Converter()
 
+start = time.perf_counter()
 print(title("Load Image & Create Output Folder"))
 converter.load_image()
 converter.create_output_folder()
 
 print(title("Quantise Image"))
 converter.quantise_image()
+
+end_time = time.perf_counter() - start
+print(f"\nFinished in {end_time:.2f} seconds.")
