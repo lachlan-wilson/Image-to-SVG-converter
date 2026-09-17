@@ -1,7 +1,7 @@
 # ---- Image2Vector ----
 #  ---- 02/08/2026 ----
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -469,6 +469,32 @@ def get_inputs(defaults: ConverterSettings,
     )
 
 
+@dataclass()
+class Images:
+    """
+    Store the various images used in the program.
+    See :class:`Converter` for the methods used to manipulate these images.
+
+    Parameters
+    ----------
+    original_image: npt.NDArray[np.uint8]
+        The original image that should be loaded from the ``images`` folder as specified in the settings.
+    image_no_bg: npt.NDArray[np.uint8]
+        The image with its background pixels replaced with black.
+    quantised_image: npt.NDArray[np.uint8]
+        The image after it had been quantised using the ``colour_depth`` settings.
+    pixel_labels: npt.NDArray[np.int32]
+    """
+    # Images are stored as numpy arrays of type uint8
+    original_image: npt.NDArray[np.uint8] = np.empty((1, 1, 4)).astype(np.uint8)    # RBGA
+    image_no_bg: npt.NDArray[np.uint8] = np.empty((1, 1, 3)).astype(np.uint8)       # RGB
+    quantised_image: npt.NDArray[np.uint8] = np.empty((1, 1, 3)).astype(np.uint8)   # BGR
+    pixel_labels: npt.NDArray[np.int32] = np.empty((1, 1)).astype(np.uint8)
+
+    # A list of the binary layers of the quantised image, one for each colour
+    binary_layers: list[npt.NDArray[np.uint8]] = field(default_factory=lambda: [np.empty((1, 1, 3)).astype(np.uint8)])
+
+
 class Converter:
     DEFAULTS = ConverterSettings(
         image_path=Path("images") / "test_image.jpg",
@@ -502,20 +528,16 @@ class Converter:
         # Initialise settings using the passed arguments or prompting the user if one isn't passed
         self.settings: ConverterSettings = get_inputs(self.DEFAULTS, self.IMAGE_TYPES, **kwargs)
 
-        # Initialise the images as none and specify their type as being a ndarray of type uint8
-        self.original_image: npt.NDArray[np.uint8] | None = None
-        self.image_no_bg: npt.NDArray[np.uint8] | None = None
-        self.quantised_image: npt.NDArray[np.uint8] | None = None
-        self.pixel_labels: npt.NDArray[np.int32] | None = None
-
         self.output_path: Path = Path("")
 
-        self.binary_layers: list[npt.NDArray[np.uint8] | None] = []
-
-    def load_image(self):
+    def load_image(self) -> npt.NDArray[np.uint8]:
         """
         Load an image as an RGBA array, applying its EXIF orientation.
-        Saves the image as a class attribute of type ``numpy.ndarray`` of shape ``(height, width, 4)``.
+
+        Returns
+        -------
+        npt.NDArray[np.uint8]
+            The loaded image as an RGBA array.
 
         Raises
         ------
@@ -533,8 +555,7 @@ class Converter:
         img_array = np.array(img, dtype=np.uint8)  # Convert the image to a numpy array of pixels
         print("\rLoaded Image.")
 
-        # Save the image as a class attribute
-        self.original_image = img_array
+        return img_array
 
     def create_output_folder(self):
         """
@@ -569,22 +590,19 @@ class Converter:
         # Save the output path as a class attribute
         self.output_path = output_path
 
-    def remove_background(self):
+    def remove_background(self, og_image: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
         """
         Replaces any background pixels with black.
         A background pixel is any pixel with any transparency (alpha < 255).
-        Saves the image as a class attribute of type ``numpy.ndarray`` of shape ``(height, width, 3)``.
 
-        Raises
-        ------
-        ValueError
-            If no image has been loaded into the ``original_image`` attribute.
+        Returns
+        -------
+        npt.NDArray[np.uint8]
+            The image with its background pixels replaced with black as an RGB array.
         """
-        if self.original_image is None:
-            raise ValueError("image not loaded, please load an image before trying to quantise it")
 
         print("Selecting transparent pixels...", end="")
-        alpha_channel = self.original_image[..., 3].copy()  # Select the alpha channel
+        alpha_channel = og_image[..., 3].copy()  # Select the alpha channel
         # Create a boolean array of the transparent pixels
         trans_pixels = alpha_channel < 255
         # Count the number of transparent pixels
@@ -593,7 +611,7 @@ class Converter:
 
         print("Replacing transparent pixels with black...", end="")
         # Select the RGB channels of the image
-        image = self.original_image[..., :3].copy()
+        image = og_image[..., :3].copy()
         # Replace the transparent pixels with black
         image[trans_pixels] = [0, 0, 0]
         print(f"\rReplaced {n_trans_pixels} transparent pixels with black.")
@@ -601,77 +619,37 @@ class Converter:
         print("Saving quantised image...", end="")
         # Save the quantised image and pixel labels
         cv2.imwrite(str(self.output_path / f"removed_bg_{self.settings.image_name}.jpg"), image)
-        self.image_no_bg = image
         print("\rSaved quantised image.")
 
-    def quantise_image(self):
+        return image
+
+    def quantise_image(self, og_image: npt.NDArray[np.uint8]) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.int32]]:
         """
-        Removes background pixels and quantises the image.
+        Removes background pixels and quantises the image using octree quantisation.
         Removes any pixels with any amount of transparency.
         Creates a new image that only contains the main colours of the original image (quantisation).
-        Saves the quantised image as a ``.jpg`` file in the BRG colour space.
-        Saves the quantised image as a class attribute of type ``numpy.ndarray`` of shape ``(height, width, 3)``.
 
-        Raises
-        ------
-        ValueError
-            If no image has been loaded into the ``original_image`` attribute.
+        Returns
+        -------
+        npt.NDArray[np.uint8]
+            The quantised image as an BGR array.
+        npt.NDArray[np.int32]
+            An array of labelled pixels.
         """
-        if self.original_image is None:
-            raise ValueError("image not loaded, please load an image before trying to quantise it")
 
         print(f"Selecting {self.settings.colour_depth} colours...", end="")
-        image_pil_rgb = Image.fromarray(self.image_no_bg, mode="RGB")
+        image_pil_rgb = Image.fromarray(og_image, mode="RGB")
         image_pil_quantised_rgb = image_pil_rgb.quantize(colors=self.settings.colour_depth,
                                                          method=Image.Quantize.FASTOCTREE,
                                                          dither=Image.Dither.NONE
                                                          )
-        height, width = self.image_no_bg.shape[:2]
+        height, width = og_image.shape[:2]
 
         pixel_labels = np.asarray(image_pil_quantised_rgb, dtype=np.int32).reshape(height, width)
 
         palette_data = image_pil_quantised_rgb.getpalette()
         palette_rgb = np.asarray(palette_data, dtype=np.uint8).reshape(-1, 3)
         colour_groups_hls = cv2.cvtColor(palette_rgb.reshape(1, -1, 3), cv2.COLOR_RGB2HLS).reshape(-1, 3).astype(np.float32)
-
-        # Old K-Means algorithm
-        # print("Converting image to HLS colour space...", end="")
-        # # Convert the image to HLS colour space
-        # image_hls = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HLS)
-        # print("\rConverted image to HLS colour space.")
-        #
-        # print("Reshaping image...", end="")
-        # # Get the height and width of the image in pixels
-        # height, width = image_hls.shape[:2]
-        # # Flatten the array so each pixel has an index with 3 colours
-        # image_flat_hls = image_hls.reshape((-1, 3)).astype(np.float32)
-        # print(f"\rReshaped image.")
-        #
-        # print(f"Selecting {self.settings.colour_depth} colours...", end="")
-        # # Define the criteria for stopping the K-Means clustering algorithm
-        # stop_criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 50, 0.2)
-        #
-        # # Use a sample of the image if best colour quality is not selected, otherwise use all pixels
-        # if self.settings.best_colour_quality:
-        #     sample = image_flat_hls
-        # else:
-        #     sample_size = min(10000, len(image_flat_hls))
-        #     indices = np.random.choice(len(image_flat_hls), sample_size, replace=False)
-        #     sample = image_flat_hls[indices]
-        #
-        # # Use K-Means clustering to select the desired number of colours
-        # _, labels, centers = cv2.kmeans(sample, self.settings.colour_depth, np.empty((0, 1)), stop_criteria, 1, cv2.KMEANS_PP_CENTERS)
-        #
-        # # Store the cluster centres (chosen colours)
-        # colour_groups = centers.astype(np.float32)
-        #
-        # # Assigns each pixel to a colour group based on the closest colour in the cluster
-        # if self.settings.best_colour_quality:
-        #     pixel_labels = labels.ravel().astype(np.int32)
-        # else:
-        #     distances = np.sum((image_flat_hls[:, np.newaxis, :] - colour_groups[np.newaxis, :, :]) ** 2, axis=2)
-        #     pixel_labels = np.argmin(distances, axis=1).astype(np.int32)
-        # print(f"\rSelected {self.settings.colour_depth} colours.")
 
         print("Sorting colours by lightness...", end="")
         # Sort the colours by their lightness so that the lighter colours are first
@@ -698,37 +676,38 @@ class Converter:
         print("Saving quantised image...", end="")
         # Save the quantised image and pixel labels
         cv2.imwrite(str(self.output_path / f"quantised_{self.settings.image_name}.jpg"), quantised_image_bgr)
-        self.quantised_image = quantised_image_bgr
-        self.pixel_labels = ordered_pixel_labels.reshape(height, width)
         print("\rSaved quantised image.")
 
-    def build_binary_layers(self):
-        print("Creating output folder for binary layers...", end="")
-        output_path = self.output_path / "_binary_layers"
-        output_path.mkdir(parents=True, exist_ok=False)
-        print("\rCreated output folder for binary layers.")
+        return quantised_image_bgr, ordered_pixel_labels.reshape(height, width)
 
-        layer = np.zeros_like(self.quantised_image)
-
-        for i in range(self.settings.colour_depth):
-            print(f"Converting each colour to a binary layer... [{i + 1}/{self.settings.colour_depth}]", end=" ")
-
-            if i > 0:
-                layer[self.pixel_labels == i - 1] = 255
+    # def build_binary_layers(self):
+    #     print("Creating output folder for binary layers...", end="")
+    #     output_path = self.output_path / "_binary_layers"
+    #     output_path.mkdir(parents=True, exist_ok=False)
+    #     print("\rCreated output folder for binary layers.")
+    #
+    #     layer = np.zeros_like(self.quantised_image)
+    #
+    #     for i in range(self.settings.colour_depth):
+    #         print(f"Converting each colour to a binary layer... [{i + 1}/{self.settings.colour_depth}]", end=" ")
+    #
+    #         if i > 0:
+    #             layer[self.pixel_labels == i - 1] = 255
 
 
 converter = Converter()
+images = Images()
 
 start = time.perf_counter()
 print(title("Load Image & Create Output Folder"))
-converter.load_image()
+images.original_image = converter.load_image()
 converter.create_output_folder()
 
 print(title("Remove Background"))
-converter.remove_background()
+images.image_no_bg = converter.remove_background(images.original_image)
 
 print(title("Quantise Image"))
-converter.quantise_image()
+images.quantised_image, images.pixel_labels = converter.quantise_image(images.image_no_bg)
 
 end_time = time.perf_counter() - start
 print(f"\nFinished in {end_time:.2f} seconds.")
