@@ -71,8 +71,6 @@ class ConverterSettings:
         E.g. ``"test_image.jpg"``.
     colour_depth : int
         Desired number of colours.
-    best_colour_quality : bool
-        Whether to use the entire image for colour quantisation or just a sample.
     min_contour_area : int
         Minimum area of a group of pixels to retain.
     max_bridge_contour_area : int
@@ -87,7 +85,6 @@ class ConverterSettings:
     image_path: Path
     image_name: str
     colour_depth: int
-    best_colour_quality: bool
     min_contour_area: int
     max_bridge_contour_area: int
     max_contour_distance: int
@@ -98,7 +95,6 @@ def get_inputs(defaults: ConverterSettings,
                image_types: tuple[str, ...],
                image_name: str | None = None,
                colour_depth: int | None = None,
-               best_colour_quality: str | bool | None = None,
                min_contour_area: int | None = None,
                max_bridge_contour_area: int | None = None,
                max_contour_distance: int | None = None,
@@ -121,8 +117,6 @@ def get_inputs(defaults: ConverterSettings,
         E.g. ``"test_image.jpg"``.
     colour_depth : int or None, optional
         Desired number of colours.
-    best_colour_quality : str or bool or None, optional
-        Whether to use the entire image for colour quantisation or just a sample.
     min_contour_area : int or None, optional
         Minimum area of a group of pixels to retain.
     max_bridge_contour_area : int or None, optional
@@ -373,82 +367,82 @@ def get_inputs(defaults: ConverterSettings,
                 except (ValueError, TypeError) as e:
                     raise ValueError(f"{name} {e}")
 
-    def validate_boolean(value_in: str | bool) -> bool:
-        """
-        Ensure a passed value is either ``'Y'``, ``'N'`` or ``bool``.
-
-        Parameter
-        ---------
-        value_in : str | bool
-            Value to be validated.
-        Returns
-        -------
-        bool
-            Validated boolean.
-
-        Raises
-        ------
-        ValueError
-            If the value is not ``'Y'`` or ``'N'``.
-        TypeError
-            If the passed value is not a string or bool.
-        """
-        if type(value_in) is bool:
-            return bool(value_in)
-        # Ensure the value is 'Y' or 'N'
-        if str(value_in).upper() not in ("Y", "N"):
-            raise ValueError(f"must be 'Y' or 'N' not {value_in}")
-
-        return False if str(value_in).upper() == "N" else True
-
-    def receive_boolean(name: str, default: str | bool, value_in: str | bool | None = None) -> bool:
-        """
-        Validate a supplied boolean or prompt until one is valid.
-
-        Parameters
-        ----------
-        name: str
-            Setting name used in prompts.
-        default: str | bool
-            Value used in prompts when ``value_in`` is ``None``.
-        value_in: str | bool | None, optional
-            Value to validate, ``None`` for interactive input.
-            Defaults to ``None``.
-
-        Returns
-        -------
-        bool
-            Validated boolean.
-
-        Raises
-        ------
-        ValueError
-            If a passed ``value_in`` is invalid.
-
-        """
-        # Creates a formatted name and default for the user prompts
-        formatted_name = name.replace("_", " ").capitalize()
-        formatted_default = f"(Y/[N])" if default == ("N" if type(default) is str else False) else f"(Y/[N])"
-
-        while True:
-            if value_in is None:
-                nonlocal printed
-                if not printed:
-                    print(title("Input Parameters"))
-                    printed = True
-
-                value = input(f"{formatted_name} {formatted_default}? ") or validate_boolean(default)
-
-                try:
-                    return validate_boolean(value)
-                except ValueError as e:
-                    print(f"\033[91mError. Invalid input, {e}. Please try again.\033[0m")
-
-            else:
-                try:
-                    return validate_boolean(value_in)
-                except ValueError as e:
-                    raise ValueError(f"{name} {e}")
+    # def validate_boolean(value_in: str | bool) -> bool:
+    #     """
+    #     Ensure a passed value is either ``'Y'``, ``'N'`` or ``bool``.
+    #
+    #     Parameter
+    #     ---------
+    #     value_in : str | bool
+    #         Value to be validated.
+    #     Returns
+    #     -------
+    #     bool
+    #         Validated boolean.
+    #
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the value is not ``'Y'`` or ``'N'``.
+    #     TypeError
+    #         If the passed value is not a string or bool.
+    #     """
+    #     if type(value_in) is bool:
+    #         return bool(value_in)
+    #     # Ensure the value is 'Y' or 'N'
+    #     if str(value_in).upper() not in ("Y", "N"):
+    #         raise ValueError(f"must be 'Y' or 'N' not {value_in}")
+    #
+    #     return False if str(value_in).upper() == "N" else True
+    #
+    # def receive_boolean(name: str, default: str | bool, value_in: str | bool | None = None) -> bool:
+    #     """
+    #     Validate a supplied boolean or prompt until one is valid.
+    #
+    #     Parameters
+    #     ----------
+    #     name: str
+    #         Setting name used in prompts.
+    #     default: str | bool
+    #         Value used in prompts when ``value_in`` is ``None``.
+    #     value_in: str | bool | None, optional
+    #         Value to validate, ``None`` for interactive input.
+    #         Defaults to ``None``.
+    #
+    #     Returns
+    #     -------
+    #     bool
+    #         Validated boolean.
+    #
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If a passed ``value_in`` is invalid.
+    #
+    #     """
+    #     # Creates a formatted name and default for the user prompts
+    #     formatted_name = name.replace("_", " ").capitalize()
+    #     formatted_default = f"(Y/[N])" if default == ("N" if type(default) is str else False) else f"(Y/[N])"
+    #
+    #     while True:
+    #         if value_in is None:
+    #             nonlocal printed
+    #             if not printed:
+    #                 print(title("Input Parameters"))
+    #                 printed = True
+    #
+    #             value = input(f"{formatted_name} {formatted_default}? ") or validate_boolean(default)
+    #
+    #             try:
+    #                 return validate_boolean(value)
+    #             except ValueError as e:
+    #                 print(f"\033[91mError. Invalid input, {e}. Please try again.\033[0m")
+    #
+    #         else:
+    #             try:
+    #                 return validate_boolean(value_in)
+    #             except ValueError as e:
+    #                 raise ValueError(f"{name} {e}")
 
     # Initialise the `printed` variable to False
     printed = False
@@ -456,7 +450,6 @@ def get_inputs(defaults: ConverterSettings,
     # Receive all the settings using the appropriate defaults, mins and maxes
     image_path, image_name = receive_image_path_and_name(defaults.image_name, image_name)
     colour_depth = receive_integer("colour_depth", defaults.colour_depth, colour_depth, min_value_incl=2, max_warn=50)
-    best_colour_quality = receive_boolean("best_colour_quality", defaults.best_colour_quality, best_colour_quality)
     min_contour_area = receive_integer("min_contour_area", defaults.min_contour_area, min_contour_area)
     max_bridge_contour_area = receive_integer("max_bridge_contour_area", defaults.max_bridge_contour_area,
                                               max_bridge_contour_area, min_value_incl=0)
@@ -469,7 +462,6 @@ def get_inputs(defaults: ConverterSettings,
         image_path=image_path,
         image_name=image_name,
         colour_depth=colour_depth,
-        best_colour_quality=best_colour_quality,
         min_contour_area=min_contour_area,
         max_bridge_contour_area=max_bridge_contour_area,
         max_contour_distance=max_contour_distance,
@@ -482,7 +474,6 @@ class Converter:
         image_path=Path("images") / "test_image.jpg",
         image_name="test_image.jpg",
         colour_depth=8,
-        best_colour_quality=False,
         min_contour_area=30,
         max_bridge_contour_area=50,
         max_contour_distance=100,
@@ -578,6 +569,18 @@ class Converter:
         self.output_path = output_path
 
     def quantise_image(self):
+        """
+        Removes background pixels and quantises the image.
+        Removes any pixels with any amount of transparency.
+        Creates a new image that only contains the main colours of the original image (quantisation).
+        Saves the quantised image as a ``.jpg`` file in the BRG colour space.
+        Saves the quantised image as a class attribute of type ``numpy.ndarray`` of shape ``(height, width, 3)``.
+
+        Raises
+        ------
+        ValueError
+            If no image has been loaded into the ``original_image`` attribute.
+        """
         if self.original_image is None:
             raise ValueError("image not loaded, please load an image before trying to quantise it")
 
@@ -596,49 +599,64 @@ class Converter:
         image_rgb[trans_pixels] = [0, 0, 0]
         print(f"\rReplaced {n_trans_pixels} transparent pixels with black.")
 
-        print("Converting image to HLS colour space...", end="")
-        # Convert the image to HLS colour space
-        image_hls = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HLS)
-        print("\rConverted image to HLS colour space.")
-
-        print("Reshaping image...", end="")
-        # Get the height and width of the image in pixels
-        height, width = image_hls.shape[:2]
-        # Flatten the array so each pixel has an index with 3 colours
-        image_flat_hls = image_hls.reshape((-1, 3)).astype(np.float32)
-        print(f"\rReshaped image.")
-
         print(f"Selecting {self.settings.colour_depth} colours...", end="")
-        # Define the criteria for stopping the K-Means clustering algorithm
-        stop_criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 50, 0.2)
+        image_pil_rgb = Image.fromarray(image_rgb, mode="RGB")
+        image_pil_quantised_rgb = image_pil_rgb.quantize(colors=self.settings.colour_depth,
+                                                         method=Image.Quantize.FASTOCTREE,
+                                                         dither=Image.Dither.NONE
+                                                         )
+        height, width = image_rgb.shape[:2]
 
-        # Use a sample of the image if best colour quality is not selected, otherwise use all pixels
-        if self.settings.best_colour_quality:
-            sample = image_flat_hls
-        else:
-            sample_size = min(10000, len(image_flat_hls))
-            indices = np.random.choice(len(image_flat_hls), sample_size, replace=False)
-            sample = image_flat_hls[indices]
+        pixel_labels = np.asarray(image_pil_quantised_rgb, dtype=np.int32).reshape(height, width)
 
-        # Use K-Means clustering to select the desired number of colours
-        _, labels, centers = cv2.kmeans(sample, self.settings.colour_depth, np.empty((0, 1)), stop_criteria, 1, cv2.KMEANS_PP_CENTERS)
+        palette_data = image_pil_quantised_rgb.getpalette()
+        palette_rgb = np.asarray(palette_data, dtype=np.uint8).reshape(-1, 3)
+        colour_groups_hls = cv2.cvtColor(palette_rgb.reshape(1, -1, 3), cv2.COLOR_RGB2HLS).reshape(-1, 3).astype(np.float32)
 
-        # Store the cluster centres (chosen colours)
-        colour_groups = centers.astype(np.float32)
-
-        # Assigns each pixel to a colour group based on the closest colour in the cluster
-        if self.settings.best_colour_quality:
-            pixel_labels = labels.ravel().astype(np.int32)
-        else:
-            distances = np.sum((image_flat_hls[:, np.newaxis, :] - colour_groups[np.newaxis, :, :]) ** 2, axis=2)
-            pixel_labels = np.argmin(distances, axis=1).astype(np.int32)
-
-        print(f"\rSelected {self.settings.colour_depth} colours.")
+        # Old K-Means algorithm
+        # print("Converting image to HLS colour space...", end="")
+        # # Convert the image to HLS colour space
+        # image_hls = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HLS)
+        # print("\rConverted image to HLS colour space.")
+        #
+        # print("Reshaping image...", end="")
+        # # Get the height and width of the image in pixels
+        # height, width = image_hls.shape[:2]
+        # # Flatten the array so each pixel has an index with 3 colours
+        # image_flat_hls = image_hls.reshape((-1, 3)).astype(np.float32)
+        # print(f"\rReshaped image.")
+        #
+        # print(f"Selecting {self.settings.colour_depth} colours...", end="")
+        # # Define the criteria for stopping the K-Means clustering algorithm
+        # stop_criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 50, 0.2)
+        #
+        # # Use a sample of the image if best colour quality is not selected, otherwise use all pixels
+        # if self.settings.best_colour_quality:
+        #     sample = image_flat_hls
+        # else:
+        #     sample_size = min(10000, len(image_flat_hls))
+        #     indices = np.random.choice(len(image_flat_hls), sample_size, replace=False)
+        #     sample = image_flat_hls[indices]
+        #
+        # # Use K-Means clustering to select the desired number of colours
+        # # TODO Change kmeans to select not only the most common colours but a range of colours that represent the main colours of the image no matter its, frequency.
+        # _, labels, centers = cv2.kmeans(sample, self.settings.colour_depth, np.empty((0, 1)), stop_criteria, 1, cv2.KMEANS_PP_CENTERS)
+        #
+        # # Store the cluster centres (chosen colours)
+        # colour_groups = centers.astype(np.float32)
+        #
+        # # Assigns each pixel to a colour group based on the closest colour in the cluster
+        # if self.settings.best_colour_quality:
+        #     pixel_labels = labels.ravel().astype(np.int32)
+        # else:
+        #     distances = np.sum((image_flat_hls[:, np.newaxis, :] - colour_groups[np.newaxis, :, :]) ** 2, axis=2)
+        #     pixel_labels = np.argmin(distances, axis=1).astype(np.int32)
+        # print(f"\rSelected {self.settings.colour_depth} colours.")
 
         print("Sorting colours by lightness...", end="")
         # Sort the colours by their lightness so that the lighter colours are first
-        colour_groups_order = (np.argsort(colour_groups[:, 1]))
-        ordered_colour_groups = colour_groups[colour_groups_order]
+        colour_groups_order = (np.argsort(colour_groups_hls[:, 1]))
+        ordered_colour_groups = colour_groups_hls[colour_groups_order]
 
         # Reassign the pixel labels to the new order
         blank_image = np.empty_like(colour_groups_order)
