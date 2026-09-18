@@ -1,11 +1,11 @@
 # ---- Image2Vector ----
 #  ---- 02/08/2026 ----
 import shutil
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass, astuple
 from pathlib import Path
 
 import cv2
-import time
 import numpy as np
 import numpy.typing as npt
 from PIL import Image, ImageOps
@@ -93,6 +93,7 @@ class ConverterSettings:
 
 def get_inputs(defaults: ConverterSettings,
                image_types: tuple[str, ...],
+               all_settings: ConverterSettings | None = None,
                image_name: str | None = None,
                colour_depth: int | None = None,
                min_contour_area: int | None = None,
@@ -112,6 +113,8 @@ def get_inputs(defaults: ConverterSettings,
     image_types : tuple[str, ...]
         Accepted lowercase file extensions, including the dot.
         E.g. ``(".jpeg", ".jpg", ".png")``.
+    all_settings : ConverterSettings or None, optional
+        A dataclass containing all settings.
     image_name : str or None, optional
         Name of an image file including the extension.
         E.g. ``"test_image.jpg"``.
@@ -447,6 +450,9 @@ def get_inputs(defaults: ConverterSettings,
     # Initialise the `printed` variable to False
     printed = False
 
+    if all_settings is not None:
+        _, image_name, colour_depth, min_contour_area, max_bridge_contour_area, max_contour_distance, bridge_width = astuple(all_settings)
+
     # Receive all the settings using the appropriate defaults, mins and maxes
     image_path, image_name = receive_image_path_and_name(defaults.image_name, image_name)
     colour_depth = receive_integer("colour_depth", defaults.colour_depth, colour_depth, min_value_incl=2, max_warn=50)
@@ -469,7 +475,6 @@ def get_inputs(defaults: ConverterSettings,
     )
 
 
-@dataclass()
 class Images:
     """
     Store the various images used in the program.
@@ -486,19 +491,19 @@ class Images:
     pixel_labels: npt.NDArray[np.int32]
     """
     # Images are stored as numpy arrays of type uint8
-    original_image: npt.NDArray[np.uint8] = np.empty((1, 1, 4)).astype(np.uint8)    # RBGA
-    image_no_bg: npt.NDArray[np.uint8] = np.empty((1, 1, 3)).astype(np.uint8)       # RGB
-    quantised_image: npt.NDArray[np.uint8] = np.empty((1, 1, 3)).astype(np.uint8)   # BGR
-    pixel_labels: npt.NDArray[np.int32] = np.empty((1, 1)).astype(np.uint8)
+    original_image: npt.NDArray[np.uint8] = np.empty((1, 1, 4)).astype(np.uint8)  # RBGA
+    image_no_bg: npt.NDArray[np.uint8] = np.empty((1, 1, 3)).astype(np.uint8)  # RGB
+    quantised_image: npt.NDArray[np.uint8] = np.empty((1, 1, 3)).astype(np.uint8)  # BGR
+    pixel_labels: npt.NDArray[np.int32] = np.empty((1, 1)).astype(np.int32)
 
     # A list of the binary layers of the quantised image, one for each colour
-    binary_layers: list[npt.NDArray[np.uint8]] = field(default_factory=lambda: [np.empty((1, 1, 3)).astype(np.uint8)])
+    binary_layers: list[npt.NDArray[np.uint8]] = [np.empty((1, 1, 3)).astype(np.uint8)]
 
 
 class Converter:
     DEFAULTS = ConverterSettings(
-        image_path=Path("images") / "test_image.jpg",
-        image_name="test_image.jpg",
+        image_path=Path("images") / "camping_rusty_field.png",
+        image_name="camping_rusty_field.png",
         colour_depth=8,
         min_contour_area=30,
         max_bridge_contour_area=50,
@@ -508,7 +513,7 @@ class Converter:
 
     IMAGE_TYPES = (".jpeg", ".jpg", ".png")
 
-    def __init__(self, **kwargs: dict[str, int | None]):
+    def __init__(self, **kwargs):
         """
         Initialise the converter, prompting for settings that are omitted.
 
@@ -616,14 +621,22 @@ class Converter:
         image[trans_pixels] = [0, 0, 0]
         print(f"\rReplaced {n_trans_pixels} transparent pixels with black.")
 
-        print("Saving quantised image...", end="")
-        # Save the quantised image and pixel labels
-        cv2.imwrite(str(self.output_path / f"removed_bg_{self.settings.image_name}.jpg"), image)
-        print("\rSaved quantised image.")
+        print("Saving image...", end="")
+        # Save image and pixel labels
+        cv2.imwrite(str(self.output_path / f"removed_bg_{self.settings.image_name}.jpg"),
+                    cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        print("\rSaved image.")
 
         return image
 
-    def quantise_image(self, og_image: npt.NDArray[np.uint8]) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.int32]]:
+    def quantise_image(self,
+                       og_image: npt.NDArray[np.uint8],
+                       hue_bins: int = 16,
+                       lightness_bins: int = 3,
+                       saturation_bins: int = 3,
+                       log_base: float | int = 1.5,
+                       saturation_strength: float | int = 0.7
+                       ) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.int32]]:
         """
         Removes background pixels and quantises the image using octree quantisation.
         Removes any pixels with any amount of transparency.
@@ -635,42 +648,127 @@ class Converter:
             The quantised image as an BGR array.
         npt.NDArray[np.int32]
             An array of labelled pixels.
+
+        Raises
+        ------
+        ValueError
+            if ``log_base`` is 1 or less.
         """
+        if log_base <= 1:
+            raise ValueError("log_base must be greater than 1")
+
+        print("Creating a copy of the image in HLS colour space...", end="")
+        image_hls = cv2.cvtColor(og_image, cv2.COLOR_RGB2HLS)
+        print("\rCreated a copy of the image in HLS colour space.")
+
+        print("Binning pixels into colour groups...", end="")
+        # Select the HLS channels of the image, each array gives each pixel one value for the channel
+        image_hue = image_hls[..., 0].astype(np.int32)
+        image_light = image_hls[..., 1].astype(np.int32)
+        image_sat = image_hls[..., 2].astype(np.int32)
+
+        # Place each pixel into the correct channel bin
+        image_hue_binned = np.clip(image_hue * hue_bins // 180, 0, hue_bins - 1)
+        image_lightness_binned = np.clip(image_light * lightness_bins // 256, 0, lightness_bins - 1)
+        image_saturation_binned = np.clip(image_sat * saturation_bins // 256, 0, saturation_bins - 1)
+
+        # Combine the bins where each combination of HLS bins has a unique id
+        image_binned_id_flat = (image_hue_binned * lightness_bins * saturation_bins
+                                + image_lightness_binned * saturation_bins
+                                + image_saturation_binned
+                                ).reshape(-1)
+        print("\rBinned pixels into colour groups.")
+
+        print("Getting the mean RGB values of each bin...", end="")
+        # Get the present bins, inverse indices (Index of present bin in image_binned_id_flat) and counts of each bin
+        present_bins, inverse_indices, counts = np.unique(image_binned_id_flat, return_inverse=True, return_counts=True)
+
+        image_rgb_flat = og_image.reshape(-1, 3).astype(np.uint8)
+
+        # Create an array to store the sum of the colours of the pixels in each bin
+        empty_bin_colours = np.zeros((len(present_bins), 3), dtype=np.float32)
+
+        # Sum the colours of the pixels in each bin
+        np.add.at(empty_bin_colours, inverse_indices, image_rgb_flat)
+
+        # Divide each bin's sum by the number of pixels in that bin
+        mean_bin_colours = empty_bin_colours / counts[:, None]
+
+        # Ensure the mean colours are within the range 0-255
+        mean_bin_colours = np.rint(np.clip(mean_bin_colours, 0, 255)).astype(np.uint8)
+
+        # Increase the saturation to improve visual similarity
+        mean_bin_colours_hls = cv2.cvtColor(mean_bin_colours[None, :, :], cv2.COLOR_RGB2HLS)[0].astype(np.float32)
+
+        saturation = mean_bin_colours_hls[..., 2] / 255.0
+        # Tail off the saturation near the extremes
+        boosted_saturation = saturation + (saturation_strength * saturation * (1.0 - saturation))
+
+        mean_bin_colours_hls[..., 2] = np.clip(boosted_saturation * 255.0, 0, 255).astype(np.float32)
+        mean_bin_colours = cv2.cvtColor(np.rint(mean_bin_colours_hls).astype(np.uint8)[None, :, :], cv2.COLOR_HLS2RGB)[
+            0]
+        print("\rGot the mean RGB values of each bin.")
+
+        print("Creating a weighted array of the colour bins...", end="")
+        # Weight counts to reduce the bias in frequent colours
+        weighted_counts = 1.0 + (np.log(counts) / np.log(log_base))
+        weighted_counts = np.maximum(1, np.rint(weighted_counts)).astype(np.int32)
+
+        # Create an array where the colour of each bin is shown its weighted_counts times
+        weighted_image = np.repeat(mean_bin_colours, weighted_counts, axis=0)
+        print("\rCreated a weighted array of the colour bins.")
 
         print(f"Selecting {self.settings.colour_depth} colours...", end="")
-        image_pil_rgb = Image.fromarray(og_image, mode="RGB")
-        image_pil_quantised_rgb = image_pil_rgb.quantize(colors=self.settings.colour_depth,
-                                                         method=Image.Quantize.FASTOCTREE,
-                                                         dither=Image.Dither.NONE
-                                                         )
-        height, width = og_image.shape[:2]
+        # Turn the array into an image for Pillow to quantise
+        weighted_pil_image_rgb = Image.fromarray(weighted_image[None, :, :], mode="RGB")
+        # Quantise the weighted counts image using the specified number of colours
+        weighted_pil_image_quantised_rgb = weighted_pil_image_rgb.quantize(colors=self.settings.colour_depth,
+                                                                           method=Image.Quantize.FASTOCTREE,
+                                                                           dither=Image.Dither.NONE
+                                                                           )
 
-        pixel_labels = np.asarray(image_pil_quantised_rgb, dtype=np.int32).reshape(height, width)
+        # pixel_labels = np.asarray(image_pil_quantised_rgb, dtype=np.int32).reshape(height, width)
 
-        palette_data = image_pil_quantised_rgb.getpalette()
-        palette_rgb = np.asarray(palette_data, dtype=np.uint8).reshape(-1, 3)
-        colour_groups_hls = cv2.cvtColor(palette_rgb.reshape(1, -1, 3), cv2.COLOR_RGB2HLS).reshape(-1, 3).astype(np.float32)
+        # Get the colours of the quantised image
+        palette_data = weighted_pil_image_quantised_rgb.getpalette()
+
+        # Ensure palette_rgb is only that of colours used in the weighted_pil_image_quantised_rgb
+        weighted_pixel_labels = np.asarray(weighted_pil_image_quantised_rgb, dtype=np.int32).reshape(-1)
+        palette_rgb_all = np.asarray(palette_data, dtype=np.uint8).reshape(-1, 3)
+        used_palette_indices = np.unique(weighted_pixel_labels)
+        palette_rgb = palette_rgb_all[used_palette_indices].astype(np.uint8).reshape(-1, 3)
+
+        # Assign each pixel to the nearest colour in the palette
+        distances = np.sum((image_rgb_flat.astype(np.float32)[:, None, :]
+                            - palette_rgb.astype(np.float32)[None, :, :]
+                            ) ** 2, axis=2)
+        pixel_labels = np.argmin(distances, axis=1).astype(np.int32)
+
+        # Convert the palette into colour groups to be sorted in HLS
+        colour_groups_hls = cv2.cvtColor(palette_rgb[None, :, :], cv2.COLOR_RGB2HLS)[0].astype(np.float32)
 
         print("Sorting colours by lightness...", end="")
         # Sort the colours by their lightness so that the lighter colours are first
         colour_groups_order = (np.argsort(colour_groups_hls[:, 1]))
-        ordered_colour_groups = colour_groups_hls[colour_groups_order]
 
         # Reassign the pixel labels to the new order
-        blank_image = np.empty_like(colour_groups_order)
-        blank_image[colour_groups_order] = np.arange(len(colour_groups_order))
-        ordered_pixel_labels = blank_image[pixel_labels].astype(np.int32)
+        ordered_palette_rgb = palette_rgb[colour_groups_order]
+
+        palette_index_map = np.empty_like(colour_groups_order)
+        palette_index_map[colour_groups_order] = np.arange(len(colour_groups_order), dtype=np.int32)
+
+        ordered_pixel_labels = palette_index_map[pixel_labels].astype(np.int32)
         print("\rSorted colours by lightness.")
 
         print("Rebuilding image...", end="")
         # Rebuild the image from the pixel labels and colour groups
-        quantised_image = ordered_colour_groups[ordered_pixel_labels].astype(np.uint8)
-        quantised_image = quantised_image.reshape((height, width, 3))
+        height, width = og_image.shape[:2]
+        quantised_image_rgb = ordered_palette_rgb[ordered_pixel_labels].reshape(height, width, 3)
         print("\rRebuilt image.")
 
         print("Converting image to BGR colour space...", end="")
         # noinspection bad-assignment
-        quantised_image_bgr: npt.NDArray[np.uint8] = cv2.cvtColor(quantised_image, cv2.COLOR_HLS2BGR)
+        quantised_image_bgr: npt.NDArray[np.uint8] = cv2.cvtColor(quantised_image_rgb, cv2.COLOR_RGB2BGR)
         print("\rConverted image to BGR colour space.")
 
         print("Saving quantised image...", end="")
@@ -695,7 +793,16 @@ class Converter:
     #             layer[self.pixel_labels == i - 1] = 255
 
 
-converter = Converter()
+converter = Converter(all_settings=ConverterSettings(
+    image_path=Path("images") / "camping_rusty_field.png",
+    image_name="camping_rusty_field.png",
+    colour_depth=8,
+    min_contour_area=30,
+    max_bridge_contour_area=50,
+    max_contour_distance=100,
+    bridge_width=1,
+))
+
 images = Images()
 
 start = time.perf_counter()
