@@ -634,8 +634,7 @@ class Converter:
                        hue_bins: int = 16,
                        lightness_bins: int = 3,
                        saturation_bins: int = 3,
-                       log_base: float | int = 1.5,
-                       saturation_strength: float | int = 0.7
+                       log_base: float | int = 2,
                        ) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.int32]]:
         """
         Removes background pixels and quantises the image using octree quantisation.
@@ -696,17 +695,6 @@ class Converter:
 
         # Ensure the mean colours are within the range 0-255
         mean_bin_colours = np.rint(np.clip(mean_bin_colours, 0, 255)).astype(np.uint8)
-
-        # Increase the saturation to improve visual similarity
-        mean_bin_colours_hls = cv2.cvtColor(mean_bin_colours[None, :, :], cv2.COLOR_RGB2HLS)[0].astype(np.float32)
-
-        saturation = mean_bin_colours_hls[..., 2] / 255.0
-        # Tail off the saturation near the extremes
-        boosted_saturation = saturation + (saturation_strength * saturation * (1.0 - saturation))
-
-        mean_bin_colours_hls[..., 2] = np.clip(boosted_saturation * 255.0, 0, 255).astype(np.float32)
-        mean_bin_colours = cv2.cvtColor(np.rint(mean_bin_colours_hls).astype(np.uint8)[None, :, :], cv2.COLOR_HLS2RGB)[
-            0]
         print("\rGot the mean RGB values of each bin.")
 
         print("Creating a weighted array of the colour bins...", end="")
@@ -792,6 +780,32 @@ class Converter:
     #         if i > 0:
     #             layer[self.pixel_labels == i - 1] = 255
 
+
+converter = Converter(all_settings=ConverterSettings(
+    image_path=Path("images") / "pippin.jpg",
+    image_name="pippin.jpg",
+    colour_depth=8,
+    min_contour_area=30,
+    max_bridge_contour_area=50,
+    max_contour_distance=100,
+    bridge_width=1,
+))
+
+images = Images()
+
+start = time.perf_counter()
+print(title("Load Image & Create Output Folder"))
+images.original_image = converter.load_image()
+converter.create_output_folder()
+
+print(title("Remove Background"))
+images.image_no_bg = converter.remove_background(images.original_image)
+
+print(title("Quantise Image"))
+images.quantised_image, images.pixel_labels = converter.quantise_image(images.image_no_bg)
+
+end_time = time.perf_counter() - start
+print(f"\nFinished in {end_time:.2f} seconds.")
 
 converter = Converter(all_settings=ConverterSettings(
     image_path=Path("images") / "camping_rusty_field.png",
